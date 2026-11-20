@@ -1,13 +1,17 @@
-.PHONY: help dev test lint eval ollama-setup
+.PHONY: help dev dev-backend test test-backend lint eval ollama-setup
 
 help: ## List the available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
 
-dev: ## Run backend and frontend (added in PR 1 and PR 8)
-	@echo "nothing to run yet"
+dev: dev-backend ## Run the app (frontend added in PR 8)
 
-test: ## Run all tests
-	@echo "no tests yet"
+dev-backend: ## Run the API on http://localhost:8000 (docs at /docs)
+	cd backend && uv run uvicorn smart_csv_mapper.main:create_app --factory --reload --port 8000
+
+test: test-backend ## Run all tests
+
+test-backend: ## Lint, type-check and test the backend
+	cd backend && uv run ruff check . && uv run mypy src tests && uv run pytest
 
 lint: ## Run all linters and the secret scan
 	uvx pre-commit run --all-files

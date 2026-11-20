@@ -1,0 +1,32 @@
+name: backend
+on:
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+permissions:
+  contents: read
+defaults:
+  run:
+    working-directory: backend
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Types
+        run: uv run mypy src tests
+      - name: No ternaries
+        run: |
+          if grep -rnE "\bif\b.+\belse\b" src tests --include=*.py | grep -vE "^\S+:[0-9]+:\s*(if|elif|else)\b"; then
+            echo "Conditional expressions are not allowed (see CLAUDE rules / ADR-014)"; exit 1
+          fi
+      - name: Tests (100% coverage)
+        run: uv run pytest
