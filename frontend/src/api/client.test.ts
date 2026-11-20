@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { server } from "../test/server";
 import { profile } from "../test/fixtures";
@@ -74,17 +74,20 @@ describe("request", () => {
 
 describe("uploadFile", () => {
   it("posts the file as multipart form data", async () => {
-    let received: File | null = null;
-    server.use(
-      http.post("/api/files", async ({ request }) => {
-        received = (await request.formData()).get("file") as File;
-        return HttpResponse.json(profile, { status: 201 });
-      }),
-    );
-    const result = await uploadFile(new File(["a,b\n1,2\n"], "data.csv", { type: "text/csv" }));
-    expect(result).toEqual(profile);
-    expect(received).not.toBeNull();
-    // jsdom renames multipart files to "blob", so check the content that was sent instead.
-    expect(await received!.text()).toBe("a,b\n1,2\n");
+    // Spy on fetch rather than parsing multipart in MSW: jsdom's File and Node's fetch
+    // disagree on multipart encoding in some Node versions (passes on 23, fails on 24).
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(Response.json(profile, { status: 201 }));
+    const file = new File(["a,b\n1,2\n"], "data.csv", { type: "text/csv" });
+    try {
+      await expect(uploadFile(file)).resolves.toEqual(profile);
+      const [url, init] = fetchSpy.mock.calls[0];
+      expect(url).toBe("/api/files");
+      expect(init?.method).toBe("POST");
+      expect((init?.body as FormData).get("file")).toBe(file);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
