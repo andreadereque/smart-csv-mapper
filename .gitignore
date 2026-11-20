@@ -29,3 +29,6 @@ evals/results/*.tmp
 .DS_Store
 .idea/
 .vscode/
+
+# local tooling
+.claude/

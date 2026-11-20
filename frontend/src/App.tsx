@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { FileProfile } from "./api/schemas";
-import { ColumnProfileTable } from "./components/ColumnProfileTable";
+import { AuditHistory } from "./components/AuditHistory";
 import { UploadStep } from "./components/UploadStep";
+import { Workspace } from "./components/Workspace";
 
 export function App() {
   const [profile, setProfile] = useState<FileProfile | null>(null);
@@ -17,12 +18,13 @@ export function App() {
       {profile === null && <UploadStep onUploaded={setProfile} />}
       {profile !== null && (
         <>
-          <ColumnProfileTable profile={profile} />
+          <Workspace profile={profile} />
           <button type="button" onClick={() => setProfile(null)}>
             Upload another file
           </button>
         </>
       )}
+      <AuditHistory />
     </main>
   );
 }
