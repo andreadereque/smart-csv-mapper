@@ -10,12 +10,18 @@ An LLM **proposes** the column mapping, a person **reviews** it, and transformat
 - Runs **free and local** with [Ollama](https://ollama.com) (`qwen2.5:3b`); data never leaves the machine.
 - Fake data only.
 
-## Try the API (backend only, for now)
+## Run it
 
 ```bash
 make ollama-setup          # once: start Ollama and pull qwen2.5:3b
-make dev-backend           # http://localhost:8000/docs
+make install               # backend (uv) and frontend (npm 11) dependencies
+make dev                   # UI on http://localhost:5173, API on http://localhost:8000/docs
 ```
+
+Upload `examples/clientes_demo.csv`, review the proposed mapping (yellow rows need a look), preview the
+first 20 rows with per-cell errors, then export. Invalid rows are explained, and you can export without them.
+
+### Or drive the API with curl
 
 ```bash
 FID=$(curl -s -F file=@examples/clientes_demo.csv localhost:8000/files | jq -r .file_id)
@@ -57,6 +63,7 @@ The model proposed `lowercase_trim` for the id column, which a person fixes in r
 - **CSV injection protection:** cells starting with `=`, `@`, tab or CR get a leading `'`; `+`/`-` only when the cell is not a plain number or an E.164 phone, so `+34612345678` survives.
 - **Append-only audit log in SQLite** (triggers reject UPDATE and DELETE): user, file name and SHA-256 (never the content), mapping, model and AI stats.
 - **Frontend types come from the backend's OpenAPI** (`npm run gen:api`), and every response is also checked at runtime with Zod schemas that `satisfies` those types: if the contract drifts, `tsc` fails; if a response is wrong anyway, the UI says so instead of crashing. CI regenerates the types and fails if they changed.
+- **The UI never trusts the proposal silently:** low-confidence rows are yellow, every edit is marked "set by you" (and sent as `origin: user`), changing a transform clears its old params, and AI transforms are labelled.
 - **Server state with TanStack Query**, no global store; tests mock only the network, with MSW.
 - **Uploads live in memory with a 1 h TTL** (10 MB / 50k rows limits); persistence is out of scope.
 
