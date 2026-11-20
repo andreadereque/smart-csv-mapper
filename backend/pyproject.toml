@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "charset-normalizer>=3.5.2",
     "fastapi>=0.165.0",
+    "httpx>=0.28.1",
     "pydantic-settings>=2.16.3",
     "python-multipart>=0.0.34",
     "uvicorn[standard]>=0.54.0",
@@ -21,6 +22,7 @@ dev = [
     "hypothesis>=6.170.17",
     "mypy>=2.4.1",
     "pytest>=9.2.0",
+    "pytest-asyncio>=1.5.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.6",
 ]
@@ -38,6 +40,7 @@ mypy_path = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 addopts = "--cov=smart_csv_mapper --cov-branch --cov-report=term-missing --cov-fail-under=100"
 
 [tool.coverage.report]

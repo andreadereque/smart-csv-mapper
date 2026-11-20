@@ -22,8 +22,18 @@ def test_healthz_reports_ok(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_readyz_reports_ok(client: TestClient) -> None:
-    assert client.get("/readyz").json() == {"status": "ok"}
+def test_readyz_reports_ok_when_the_model_answers(client: TestClient) -> None:
+    response = client.get("/readyz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "llm": "fake"}
+
+
+def test_readyz_is_503_when_the_model_is_down(client: TestClient) -> None:
+    client.app.state.llm.ready = False  # type: ignore[attr-defined]
+    response = client.get("/readyz")
+    assert response.status_code == 503
+    assert response.json() == {"status": "unavailable", "llm": "fake"}
+    assert client.get("/healthz").status_code == 200
 
 
 def test_request_id_is_generated_when_missing(client: TestClient) -> None:
@@ -98,3 +108,12 @@ def test_request_id_does_not_leak_after_the_request() -> None:
         coroutine.send(None)
     assert seen == ["req-9"]
     assert request_id_var.get() == "-"
+
+
+def test_create_app_uses_the_provider_it_is_given() -> None:
+    from smart_csv_mapper.config import Settings
+    from smart_csv_mapper.llm.fake import FakeProvider
+
+    given = FakeProvider(model="injected")
+    app = create_app(Settings(llm_provider="ollama"), llm=given)
+    assert app.state.llm is given
