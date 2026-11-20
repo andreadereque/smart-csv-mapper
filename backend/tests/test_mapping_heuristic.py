@@ -129,3 +129,22 @@ def test_a_synonym_as_a_whole_word_scores_between_exact_and_fuzzy(target: str, h
 
 def test_a_synonym_inside_another_word_does_not_count() -> None:
     assert heuristic_field("external_id", [column("Provider", "x")]).source is None
+
+
+def test_a_full_name_column_feeds_first_and_last_name_with_split_transforms() -> None:
+    columns = [column("Nombre completo", "María López García"), column("Correo", "a@b.com")]
+    first = heuristic_field("first_name", columns)
+    last = heuristic_field("last_name", columns)
+    assert (first.source, first.transform) == ("Nombre completo", "split_name_first")
+    assert (last.source, last.transform) == ("Nombre completo", "split_name_last")
+    assert first.confidence == 0.8
+
+
+def test_separate_name_columns_win_over_a_generic_name_column() -> None:
+    columns = [column("Nombre", "Ana"), column("Apellidos", "Ruiz"), column("Cliente", "Acme SL")]
+    assert heuristic_field("first_name", columns).transform == "trim"
+    assert heuristic_field("last_name", columns).source == "Apellidos"
+
+
+def test_no_columns_means_unmapped() -> None:
+    assert heuristic_field("email", []).source is None

@@ -42,6 +42,19 @@ SYNONYMS: dict[str, tuple[str, ...]] = {
     ),
     "due_date": ("due date", "due", "fecha", "vencimiento", "fecha vencimiento", "date"),
 }
+FULL_NAME = (
+    "full name",
+    "name",
+    "nombre completo",
+    "nombre y apellidos",
+    "customer name",
+    "client name",
+    "cliente",
+    "titular",
+    "deudor",
+    "debtor",
+)
+SPLIT_TRANSFORMS = {"first_name": "split_name_first", "last_name": "split_name_last"}
 DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%d.%m.%Y", "%d/%m/%y")
 EXACT_CONFIDENCE = 0.8
 WORD_CONFIDENCE = 0.7
@@ -54,14 +67,14 @@ def normalise_header(header: str) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", text.lower()).split())
 
 
-def _score(target: str, header: str) -> float:
+def _score(synonyms: tuple[str, ...], header: str) -> float:
     name = normalise_header(header)
-    if name in SYNONYMS[target]:
+    if name in synonyms:
         return EXACT_CONFIDENCE
     words = set(name.split())
-    if any(" " not in s and s in words for s in SYNONYMS[target]):
+    if any(" " not in s and s in words for s in synonyms):
         return WORD_CONFIDENCE
-    best = max(difflib.SequenceMatcher(None, name, s).ratio() for s in SYNONYMS[target])
+    best = max(difflib.SequenceMatcher(None, name, s).ratio() for s in synonyms)
     if best >= FUZZY_THRESHOLD:
         return round(best * 0.7, 2)
     return 0.0
@@ -100,12 +113,27 @@ def choose_transform(target: str, column: ColumnProfile) -> tuple[str, dict[str,
     return "trim", {}
 
 
+def _best(synonyms: tuple[str, ...], columns: list[ColumnProfile]) -> tuple[float, ColumnProfile]:
+    scored = [(_score(synonyms, c.name), c) for c in columns]
+    return max(scored, key=lambda pair: pair[0])
+
+
 def heuristic_field(target: str, columns: list[ColumnProfile]) -> FieldMapping:
-    scored = [(_score(target, c.name), c) for c in columns]
-    scored = [(score, c) for score, c in scored if score > 0]
-    if not scored:
+    if not columns:
         return FieldMapping(target=target)
-    score, column = max(scored, key=lambda pair: pair[0])
+    score, column = _best(SYNONYMS[target], columns)
+    if target in SPLIT_TRANSFORMS:
+        full_score, full_column = _best(FULL_NAME, columns)
+        if full_score > score:
+            return FieldMapping(
+                target=target,
+                source=full_column.name,
+                transform=SPLIT_TRANSFORMS[target],
+                confidence=full_score,
+                origin="heuristic",
+            )
+    if score == 0:
+        return FieldMapping(target=target)
     transform, params = choose_transform(target, column)
     return FieldMapping(
         target=target,

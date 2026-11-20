@@ -5,6 +5,8 @@ from fastapi.responses import JSONResponse
 
 from smart_csv_mapper import __version__
 from smart_csv_mapper.api import catalog, files, health, mapping
+from smart_csv_mapper.cache import Cache, InMemoryCache
+from smart_csv_mapper.cache.redis_cache import RedisCache
 from smart_csv_mapper.config import Settings, get_settings
 from smart_csv_mapper.ingest.errors import IngestError
 from smart_csv_mapper.ingest.store import FileStore
@@ -18,6 +20,12 @@ async def ingest_error_handler(_: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=422, content={"code": exc.code, "detail": exc.message})
 
 
+def build_cache(settings: Settings) -> Cache:
+    if settings.redis_url:
+        return RedisCache.from_url(settings.redis_url)
+    return InMemoryCache()
+
+
 def create_app(settings: Settings | None = None, llm: LLMProvider | None = None) -> FastAPI:
     if settings is None:
         settings = get_settings()
@@ -28,6 +36,7 @@ def create_app(settings: Settings | None = None, llm: LLMProvider | None = None)
     app.state.settings = settings
     app.state.file_store = FileStore()
     app.state.llm = llm
+    app.state.cache = build_cache(settings)
     app.middleware("http")(request_id_middleware)
     app.add_exception_handler(IngestError, ingest_error_handler)
     app.include_router(health.router)

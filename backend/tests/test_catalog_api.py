@@ -23,6 +23,8 @@ def test_transforms_endpoint_lists_the_closed_catalog(client: TestClient) -> Non
         "normalize_phone",
         "constant",
         "map_values",
+        "split_name_first",
+        "split_name_last",
     }
     assert body["parse_date"]["required_params"] == ["format"]
     assert body["normalize_phone"]["optional_params"] == ["default_country"]
@@ -30,3 +32,5 @@ def test_transforms_endpoint_lists_the_closed_catalog(client: TestClient) -> Non
     assert body["trim"]["llm_allowed"] is True
     assert body["constant"]["llm_allowed"] is False
     assert body["map_values"]["llm_allowed"] is False
+    assert body["split_name_first"]["kind"] == "ai"
+    assert body["trim"]["kind"] == "deterministic"

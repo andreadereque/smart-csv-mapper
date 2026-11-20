@@ -97,3 +97,9 @@ def test_transforms_never_raise(text: str) -> None:
         ("map_values", {"a": "b"}),
     ]:
         assert isinstance(apply(name, text, params), Ok | Err)
+
+
+def test_ai_transforms_refuse_to_run_on_a_single_cell() -> None:
+    result = apply("split_name_first", "Ana Ruiz", {})
+    assert isinstance(result, Err)
+    assert "whole column" in result.reason
