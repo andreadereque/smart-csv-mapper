@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     max_upload_mb: int = 10
     max_rows: int = 50_000
     log_level: str = "INFO"
+    audit_db_path: str = "audit.sqlite"
 
 
 @lru_cache

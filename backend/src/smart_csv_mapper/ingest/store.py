@@ -16,6 +16,7 @@ class StoredFile:
     filename: str
     parsed: ParsedCsv
     stored_at: float
+    sha256: str = ""
 
 
 class FileNotFound(KeyError):
@@ -32,9 +33,9 @@ class FileStore:
         self._clock = clock
         self._files: dict[str, StoredFile] = {}
 
-    def put(self, filename: str, parsed: ParsedCsv) -> StoredFile:
+    def put(self, filename: str, parsed: ParsedCsv, sha256: str = "") -> StoredFile:
         self._evict_expired()
-        stored = StoredFile(uuid.uuid4().hex, filename, parsed, self._clock())
+        stored = StoredFile(uuid.uuid4().hex, filename, parsed, self._clock(), sha256)
         self._files[stored.file_id] = stored
         return stored
 

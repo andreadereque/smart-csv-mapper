@@ -10,6 +10,28 @@ An LLM **proposes** the column mapping, a person **reviews** it, and transformat
 - Runs **free and local** with [Ollama](https://ollama.com) (`qwen2.5:3b`); data never leaves the machine.
 - Fake data only.
 
+## Try the API (backend only, for now)
+
+```bash
+make ollama-setup          # once: start Ollama and pull qwen2.5:3b
+make dev-backend           # http://localhost:8000/docs
+```
+
+```bash
+FID=$(curl -s -F file=@examples/clientes_demo.csv localhost:8000/files | jq -r .file_id)
+curl -s -X POST localhost:8000/files/$FID/suggest > proposal.json      # the model's proposal
+jq '{fields, rows: 5}' proposal.json | curl -s -X POST -H 'content-type: application/json' \
+  -d @- localhost:8000/files/$FID/preview                               # first rows + errors
+jq '{fields, skip_invalid: true}' proposal.json | curl -s -X POST -H 'content-type: application/json' \
+  -d @- localhost:8000/files/$FID/export -o clean.csv                   # full file
+curl -s localhost:8000/audit                                            # who exported what
+```
+
+Live run on an M2 with 8 GB (`examples/clientes_demo.csv`, 300 rows, fake data): proposal in 13 s with the
+full-name column mapped to `split_name_first` / `split_name_last`; export in 32 s with **33 distinct names →
+3 model calls** (5 already cached by the preview); 299 rows exported, 1 skipped (invalid email on row 150).
+The model proposed `lowercase_trim` for the id column, which a person fixes in review: that is the point.
+
 ## Design decisions
 
 - **App factory + settings from the environment** (`create_app`, pydantic-settings): each test builds its own app; no global state.
@@ -30,6 +52,10 @@ An LLM **proposes** the column mapping, a person **reviews** it, and transformat
 - **AI transforms run on the column, not on the cell** (`split_name_first` / `split_name_last`): distinct values only → cache lookup → misses in batches of 20 → results applied to every row. Live run: 1,000 rows, 10 distinct names → 1 model call (13 s); second run → 0 calls.
 - **The model may choose where to cut a name, never what it says:** an answer is accepted only if first + last rebuilds the input letter by letter (ignoring spaces, case and a "Surname, First" comma). Failed values are retried once, alone; then they become per-cell errors and are never cached.
 - **Cache key = transform + prompt version + model + value**, so changing the prompt or the model never serves stale results. In memory by default, Redis when `REDIS_URL` is set.
+- **Preview processes the first rows only** (20 by default), so it stays fast even with AI transforms; export processes the whole file and reuses whatever the preview cached.
+- **Export refuses invalid rows unless asked** (`skip_invalid`), and says which cell failed and why. Duplicate `external_id`s are errors.
+- **CSV injection protection:** cells starting with `=`, `@`, tab or CR get a leading `'`; `+`/`-` only when the cell is not a plain number or an E.164 phone, so `+34612345678` survives.
+- **Append-only audit log in SQLite** (triggers reject UPDATE and DELETE): user, file name and SHA-256 (never the content), mapping, model and AI stats.
 - **Uploads live in memory with a 1 h TTL** (10 MB / 50k rows limits); persistence is out of scope.
 
 ## License

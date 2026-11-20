@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+from pathlib import Path
 
 import pytest
 from fastapi import Request, Response
@@ -49,10 +50,11 @@ def test_request_id_is_propagated_from_the_caller(client: TestClient) -> None:
 
 
 def test_create_app_reads_settings_from_the_environment(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    monkeypatch.setenv("AUDIT_DB_PATH", str(tmp_path / "audit.sqlite"))
     create_app()
     assert logging.getLogger().level == logging.WARNING
     get_settings.cache_clear()
@@ -110,10 +112,11 @@ def test_request_id_does_not_leak_after_the_request() -> None:
     assert request_id_var.get() == "-"
 
 
-def test_create_app_uses_the_provider_it_is_given() -> None:
+def test_create_app_uses_the_provider_it_is_given(tmp_path: Path) -> None:
     from smart_csv_mapper.config import Settings
     from smart_csv_mapper.llm.fake import FakeProvider
 
     given = FakeProvider(model="injected")
-    app = create_app(Settings(llm_provider="ollama"), llm=given)
+    settings = Settings(llm_provider="ollama", audit_db_path=str(tmp_path / "a.sqlite"))
+    app = create_app(settings, llm=given)
     assert app.state.llm is given

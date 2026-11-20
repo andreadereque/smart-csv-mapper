@@ -4,7 +4,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from smart_csv_mapper import __version__
-from smart_csv_mapper.api import catalog, files, health, mapping
+from smart_csv_mapper.api import catalog, files, health, mapping, process
+from smart_csv_mapper.audit import AuditLog
 from smart_csv_mapper.cache import Cache, InMemoryCache
 from smart_csv_mapper.cache.redis_cache import RedisCache
 from smart_csv_mapper.config import Settings, get_settings
@@ -37,10 +38,12 @@ def create_app(settings: Settings | None = None, llm: LLMProvider | None = None)
     app.state.file_store = FileStore()
     app.state.llm = llm
     app.state.cache = build_cache(settings)
+    app.state.audit = AuditLog(settings.audit_db_path)
     app.middleware("http")(request_id_middleware)
     app.add_exception_handler(IngestError, ingest_error_handler)
     app.include_router(health.router)
     app.include_router(files.router)
     app.include_router(catalog.router)
     app.include_router(mapping.router)
+    app.include_router(process.router)
     return app
