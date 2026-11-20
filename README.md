@@ -27,6 +27,9 @@ An LLM **proposes** the column mapping, a person **reviews** it, and transformat
 - **Semantic validation + one retry:** unknown columns, disallowed transforms, missing params and duplicate targets are sent back to the model once; then the system falls back to header heuristics (synonyms in Spanish and English, whole-word and fuzzy matching, sample-based number and date format detection).
 - **Some transforms are for people only** (`constant`, `map_values`): in a live test the 3B model chose `constant` for the id column, which would have given every row the same id.
 - **Self-reported confidence isn't trusted:** the 3B model says 1.0 for everything, so a score above 0.6 is kept only when the header heuristic points to the same column.
+- **AI transforms run on the column, not on the cell** (`split_name_first` / `split_name_last`): distinct values only → cache lookup → misses in batches of 20 → results applied to every row. Live run: 1,000 rows, 10 distinct names → 1 model call (13 s); second run → 0 calls.
+- **The model may choose where to cut a name, never what it says:** an answer is accepted only if first + last rebuilds the input letter by letter (ignoring spaces, case and a "Surname, First" comma). Failed values are retried once, alone; then they become per-cell errors and are never cached.
+- **Cache key = transform + prompt version + model + value**, so changing the prompt or the model never serves stale results. In memory by default, Redis when `REDIS_URL` is set.
 - **Uploads live in memory with a 1 h TTL** (10 MB / 50k rows limits); persistence is out of scope.
 
 ## License

@@ -17,6 +17,8 @@ def test_prompt_lists_schema_transforms_and_columns_as_data() -> None:
     assert '{"format": "<strftime' in prompt
     assert "previous answer was rejected" not in prompt
     assert "- constant:" not in prompt
+    assert "- split_name_first: AI:" in prompt
+    assert "split_name_last" in prompt
     assert "- map_values:" not in prompt
 
 

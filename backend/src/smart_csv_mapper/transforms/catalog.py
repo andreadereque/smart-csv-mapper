@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Literal
 
 from smart_csv_mapper.transforms import functions
 from smart_csv_mapper.transforms.result import Err, Result
@@ -18,6 +19,11 @@ class TransformSpec:
     optional_params: tuple[str, ...] = ()
     free_params: bool = field(default=False)  # map_values: any key is a lookup entry
     llm_allowed: bool = True  # False = only a person may choose it in the UI
+    kind: Literal["deterministic", "ai"] = "deterministic"
+
+
+def _whole_column_only(value: str, params: dict[str, str]) -> Result:
+    return Err("AI transforms run on the whole column (distinct values, cached), not per cell")
 
 
 CATALOG: dict[str, TransformSpec] = {
@@ -60,6 +66,18 @@ CATALOG: dict[str, TransformSpec] = {
             functions.map_values,
             free_params=True,
             llm_allowed=False,
+        ),
+        TransformSpec(
+            "split_name_first",
+            "AI: from a full-name column, the first name(s). 'María López García' → 'María'.",
+            _whole_column_only,
+            kind="ai",
+        ),
+        TransformSpec(
+            "split_name_last",
+            "AI: from a full-name column, the last name(s). 'María López García' → 'López García'.",
+            _whole_column_only,
+            kind="ai",
         ),
     ]
 }
