@@ -1,0 +1,51 @@
+name: evals
+# Runs the evals against a real model (Ollama, CPU-only on the GitHub runner).
+# Only when something that can change the model's behaviour changes, or on demand.
+on:
+  pull_request:
+    paths:
+      - "backend/src/smart_csv_mapper/mapping/**"
+      - "backend/src/smart_csv_mapper/ai_transforms/**"
+      - "backend/src/smart_csv_mapper/transforms/**"
+      - "backend/src/smart_csv_mapper/evaluation.py"
+      - "evals/**"
+      - ".github/workflows/evals.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  LLM_MODEL: qwen2.5:3b
+  LOG_LEVEL: WARNING
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Cache the model
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama/models
+          key: ollama-${{ env.LLM_MODEL }}
+      - name: Install and start Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          (ollama serve > /tmp/ollama.log 2>&1 &)
+          for i in $(seq 1 30); do curl -sf localhost:11434/api/tags && break; sleep 1; done
+          ollama pull "$LLM_MODEL"
+      - name: Run the evals
+        working-directory: backend
+        run: |
+          uv sync --locked
+          uv run python ../evals/run.py --out ../eval-report
+      - name: Add the report to the job summary
+        if: always()
+        run: cat eval-report/*.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: eval-report/

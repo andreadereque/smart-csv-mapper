@@ -52,16 +52,30 @@ class TargetField:
     required: bool
     description: str
     validate: Callable[[str], Result]
+    fitting_transforms: tuple[str, ...]  # what the model may choose for this field
 
 
 TARGET_SCHEMA: tuple[TargetField, ...] = (
-    TargetField("external_id", "string", True, "The client's own id for the debtor.", _text),
-    TargetField("first_name", "string", True, "Given name(s).", _text),
-    TargetField("last_name", "string", True, "Family name(s).", _text),
-    TargetField("email", "email", False, "Contact email.", _email),
-    TargetField("phone", "phone", False, "Contact phone, E.164.", _phone),
-    TargetField("amount_due", "decimal", True, "Amount owed, ≥ 0, two decimals.", _amount),
-    TargetField("due_date", "date", False, "When the amount is due, ISO 8601.", _date),
+    TargetField(
+        "external_id", "string", True, "The client's own id for the debtor.", _text, ("trim",)
+    ),
+    TargetField(
+        "first_name", "string", True, "Given name(s).", _text, ("trim", "split_name_first")
+    ),
+    TargetField("last_name", "string", True, "Family name(s).", _text, ("trim", "split_name_last")),
+    TargetField("email", "email", False, "Contact email.", _email, ("lowercase_trim", "trim")),
+    TargetField("phone", "phone", False, "Contact phone, E.164.", _phone, ("normalize_phone",)),
+    TargetField(
+        "amount_due",
+        "decimal",
+        True,
+        "Amount owed, ≥ 0, two decimals.",
+        _amount,
+        ("parse_eu_number", "parse_us_number"),
+    ),
+    TargetField(
+        "due_date", "date", False, "When the amount is due, ISO 8601.", _date, ("parse_date",)
+    ),
 )
 
 FIELDS_BY_NAME = {f.name: f for f in TARGET_SCHEMA}

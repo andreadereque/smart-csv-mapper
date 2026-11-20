@@ -1,0 +1,33 @@
+{
+  "external_id": {
+    "source": "Nº factura",
+    "transform": "trim"
+  },
+  "first_name": {
+    "source": "Cliente",
+    "transform": "split_name_first"
+  },
+  "last_name": {
+    "source": "Cliente",
+    "transform": "split_name_last"
+  },
+  "email": {
+    "source": "Email",
+    "transform": "lowercase_trim"
+  },
+  "phone": {
+    "source": "Teléfono",
+    "transform": "normalize_phone"
+  },
+  "amount_due": {
+    "source": "Importe (€)",
+    "transform": "parse_eu_number"
+  },
+  "due_date": {
+    "source": "Vencimiento",
+    "transform": "parse_date",
+    "params": {
+      "format": "%d/%m/%Y"
+    }
+  }
+}

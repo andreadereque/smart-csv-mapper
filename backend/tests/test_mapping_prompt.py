@@ -38,4 +38,4 @@ def test_answer_schema_restricts_targets_and_transforms_with_enums() -> None:
 
 
 def test_prompt_version_is_tracked() -> None:
-    assert PROMPT_VERSION == "mapping_v1"
+    assert PROMPT_VERSION == "mapping_v2"

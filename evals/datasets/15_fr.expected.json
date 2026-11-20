@@ -1,0 +1,33 @@
+{
+  "external_id": {
+    "source": "Référence",
+    "transform": "trim"
+  },
+  "first_name": {
+    "source": "Prénom",
+    "transform": "trim"
+  },
+  "last_name": {
+    "source": "Nom",
+    "transform": "trim"
+  },
+  "email": {
+    "source": "Courriel",
+    "transform": "lowercase_trim"
+  },
+  "phone": {
+    "source": "Téléphone",
+    "transform": "normalize_phone"
+  },
+  "amount_due": {
+    "source": "Montant dû",
+    "transform": "parse_eu_number"
+  },
+  "due_date": {
+    "source": "Échéance",
+    "transform": "parse_date",
+    "params": {
+      "format": "%d/%m/%Y"
+    }
+  }
+}

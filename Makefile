@@ -27,8 +27,8 @@ test-backend: ## Lint, type-check and test the backend
 lint: ## Run all linters and the secret scan
 	uvx pre-commit run --all-files
 
-eval: ## Run the evals against the local model (added in PR 10)
-	@echo "no evals yet"
+eval: ## Run the evals against the local model and write evals/results/<date>-<model>.md
+	cd backend && LOG_LEVEL=WARNING uv run python ../evals/run.py
 
 ollama-setup: ## Start Ollama and download the default model
 	brew services start ollama

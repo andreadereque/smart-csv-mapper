@@ -55,11 +55,12 @@ async def suggest_mapping(
     file_id: str, columns: list[ColumnProfile], llm: LLMProvider
 ) -> MappingProposal:
     from_model, attempts, warnings = await _ask_model(llm, columns)
+    taken = frozenset(m.source for m in from_model.values() if m.source is not None)
     fields = []
     for target in TARGET_SCHEMA:
         mapping = from_model.get(target.name)
         if mapping is None:
-            mapping = heuristic_field(target.name, columns)
+            mapping = heuristic_field(target.name, columns, taken)
         else:
             mapping = calibrate(mapping, columns)
         if mapping.source is None and target.required:

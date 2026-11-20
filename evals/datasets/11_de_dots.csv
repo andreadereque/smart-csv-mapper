@@ -1,0 +1,4 @@
+Kunden-Nr;Vorname;Nachname;E-Mail;Telefon;Betrag;Fällig am
+D-1;Lukas;Müller;lukas@example.com;+49 30 1234567;1.250,50;20.11.2026
+D-2;Anna;Schmidt;anna@example.com;+49 30 1234568;80,00;01.12.2026
+D-3;Jonas;Weber;jonas@example.com;+49 30 1234569;3.400,00;15.01.2027

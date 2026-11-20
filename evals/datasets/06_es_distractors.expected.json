@@ -1,0 +1,33 @@
+{
+  "external_id": {
+    "source": "Referencia",
+    "transform": "trim"
+  },
+  "first_name": {
+    "source": "Nombre",
+    "transform": "trim"
+  },
+  "last_name": {
+    "source": "Apellidos",
+    "transform": "trim"
+  },
+  "email": {
+    "source": "Correo",
+    "transform": "lowercase_trim"
+  },
+  "phone": {
+    "source": "Teléfono",
+    "transform": "normalize_phone"
+  },
+  "amount_due": {
+    "source": "Importe pendiente",
+    "transform": "parse_eu_number"
+  },
+  "due_date": {
+    "source": "Fecha vencimiento",
+    "transform": "parse_date",
+    "params": {
+      "format": "%d/%m/%Y"
+    }
+  }
+}

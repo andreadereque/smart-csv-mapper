@@ -1,0 +1,4 @@
+Référence;Prénom;Nom;Courriel;Téléphone;Montant dû;Échéance
+FR-1;Camille;Dubois;camille@example.com;06 12 34 56 78;1 250,50;20/11/2026
+FR-2;Louis;Martin;louis@example.com;06 12 34 56 79;80,00;01/12/2026
+FR-3;Léa;Bernard;lea@example.com;06 12 34 56 80;3 400,00;15/01/2027

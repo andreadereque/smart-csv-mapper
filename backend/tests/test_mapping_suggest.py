@@ -13,7 +13,7 @@ async def test_valid_first_answer_is_used_as_is() -> None:
     assert proposal.warnings == []
     assert [f.origin for f in proposal.fields] == ["llm"] * 7
     assert proposal.model == "fake-model"
-    assert proposal.prompt_version == "mapping_v1"
+    assert proposal.prompt_version == "mapping_v2"
     assert len(llm.prompts) == 1
 
 
@@ -88,3 +88,28 @@ async def test_proposal_applies_calibration_to_model_answers() -> None:
     proposal = await suggest_mapping("f1", SPANISH_COLUMNS, FakeProvider([answer]))
     assert proposal.fields[1].confidence == 0.6
     assert proposal.fields[2].confidence == 0.95
+
+
+async def test_heuristic_fill_skips_columns_the_model_already_used() -> None:
+    columns = [column("Account", "X1"), column("Amount Due", "100.00", "35.99")]
+    answer = {
+        "mappings": [
+            {
+                "target": "external_id",
+                "source": "Account",
+                "transform": "trim",
+                "params": {},
+                "confidence": 0.9,
+            },
+            {
+                "target": "amount_due",
+                "source": "Amount Due",
+                "transform": "parse_us_number",
+                "params": {},
+                "confidence": 0.9,
+            },
+        ]
+    }
+    proposal = await suggest_mapping("f1", columns, FakeProvider([answer]))
+    due_date = proposal.fields[6]
+    assert (due_date.target, due_date.source) == ("due_date", None)

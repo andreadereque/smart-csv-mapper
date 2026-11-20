@@ -118,7 +118,12 @@ def _best(synonyms: tuple[str, ...], columns: list[ColumnProfile]) -> tuple[floa
     return max(scored, key=lambda pair: pair[0])
 
 
-def heuristic_field(target: str, columns: list[ColumnProfile]) -> FieldMapping:
+def heuristic_field(
+    target: str, columns: list[ColumnProfile], taken: frozenset[str] = frozenset()
+) -> FieldMapping:
+    """Best guess for one target. Columns in `taken` already feed another field and are skipped,
+    so 'Amount Due' can't also become the due date."""
+    columns = [c for c in columns if c.name not in taken]
     if not columns:
         return FieldMapping(target=target)
     score, column = _best(SYNONYMS[target], columns)

@@ -1,8 +1,8 @@
 """Split full names with the model: distinct values only, cached, batched, and verified.
 
 Verification is the guard rail: the answer is accepted only if first + last rebuilds the
-input (ignoring spaces, case and a "Surname, First" comma). The model can choose where to
-cut, but it can't invent, drop or "fix" a single letter.
+input exactly (ignoring only spaces and a "Surname, First" comma). The model can choose where
+to cut, but it can't invent, drop, recase or "fix" a single letter.
 """
 
 import hashlib
@@ -20,7 +20,7 @@ from smart_csv_mapper.transforms.result import Err, Ok, Result
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "split_name_v1"
+PROMPT_VERSION = "split_name_v2"
 TEMPLATE = resources.files("smart_csv_mapper.ai_transforms.prompts").joinpath(
     f"{PROMPT_VERSION}.md"
 )
@@ -84,7 +84,7 @@ class SplitOutcome:
 
 
 def _letters(text: str) -> str:
-    return "".join(text.replace(",", " ").lower().split())
+    return "".join(text.replace(",", " ").split())
 
 
 def is_faithful(original: str, first: str, last: str) -> bool:
