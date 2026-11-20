@@ -18,6 +18,8 @@ An LLM **proposes** the column mapping, a person **reviews** it, and transformat
 - **Encoding and delimiter detection:** UTF-8 (with BOM) first, then charset-normalizer; `csv.Sniffer` with a counting fallback.
 - **Stable error codes** (`duplicate_header`, `too_many_rows`, `malformed_csv`…) returned as 422, so the UI can explain each problem.
 - **Only a profile leaves the parser:** 5 distinct samples, distinct count and empty ratio per column. The LLM never sees the whole file.
+- **A closed catalog of named, pure transforms** (`trim`, `parse_eu_number`, `normalize_phone`, `map_values`…). Each returns `Ok(value)` or `Err(reason)` and never raises; the LLM may only pick from this list.
+- **Transforms and validation are separate steps:** a transform reshapes the text, then the target schema validates it (required, E.164, ≥ 0, ISO date). Empty stays empty until the schema decides.
 - **Uploads live in memory with a 1 h TTL** (10 MB / 50k rows limits); persistence is out of scope.
 
 ## License
