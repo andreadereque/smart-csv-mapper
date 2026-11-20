@@ -1,232 +1,170 @@
-# smart-csv-mapper · Plan de desarrollo y decisiones de arquitectura (ADR)
+# smart-csv-mapper · Development plan and architecture decisions (ADRs)
 
-> Estado: **aceptado** · Fecha: 2026-11-20
-> Documento vivo: cada decisión tiene su ADR. Si una decisión cambia, el ADR antiguo pasa a *Sustituido* y se añade uno nuevo; no se borra.
+> Status: **accepted** · Started: 2026-11-20 · Spanish version: [PLAN.es.md](PLAN.es.md)
+> A living document: every decision has an ADR. When a decision changes, the old ADR is marked
+> *Superseded* and a new one is added; nothing is deleted.
 
-## 1. Contexto
+## 1. Context
 
-Al integrar clientes nuevos, cada uno envía sus ficheros CSV con columnas distintas: nombres, orden, formatos de fecha y de número, y a veces columnas que hay que transformar, como un nombre completo que hay que separar en nombre y apellidos. Configurar cada integración a mano lleva días de trabajo de ingeniería.
+When onboarding a new client, each one sends CSV files with different columns: names, order, date and
+number formats, and sometimes columns that need transforming, such as a full name that must be split into
+first and last name. Setting up each integration by hand takes days of engineering work.
 
-**smart-csv-mapper** es una versión abierta y simplificada de un sistema que construí en producción. Un LLM **propone** cómo encajan las columnas del fichero en un esquema destino fijo, la persona **revisa y corrige**, y las transformaciones son **deterministas** siempre que se puede. La IA solo se usa en los casos que el código no resuelve, enviando **valores únicos** y **cacheando** los resultados.
+**smart-csv-mapper** is an open, simplified version of a system I built in production. An LLM **proposes**
+how the file's columns fit a fixed target schema, a person **reviews and corrects** it, and transforms are
+**deterministic** wherever possible. AI is only used where code can't do the job, on **distinct values**,
+with a **cache**.
 
-Es un proyecto de práctica y de portfolio. Usa **solo datos inventados** y no contiene código de ninguna empresa.
+It is a practice and portfolio project. It uses **fake data only** and contains no company code.
 
-### Entorno de desarrollo
-- MacBook con Apple M2 y **8 GB de RAM**. Condiciona el tamaño del modelo local y la decisión sobre Docker.
-- Ya instalados: Python 3.13, uv, Node 23, npm, git, gh.
-- Por instalar: **Ollama** (`brew install ollama`), y Redis y Docker de forma opcional.
+### Development machine
+- Apple M2 with **8 GB of RAM**: this drives the size of the local model and the Docker decision.
+- Python 3.13, uv, Node, npm, git, gh; Ollama installed with Homebrew.
 
-## 2. Objetivos
+## 2. Goals
 
-1. Subir un CSV y obtener en segundos una propuesta de mapeo al esquema destino, con un nivel de confianza por campo.
-2. Revisar y editar el mapeo en una interfaz web, y ver una vista previa con los errores marcados antes de exportar.
-3. Transformaciones deterministas para lo común; IA solo como último recurso, por valores únicos, en lotes y con caché.
-4. Medir la calidad con **evals** reproducibles en lugar de "parece que funciona".
-5. Coste cero: desarrollar, probar y ejecutar el CI sin pagar nada.
-6. Código simple que se pueda explicar línea por línea.
+1. Upload a CSV and get, in seconds, a mapping proposal to the target schema with a confidence per field.
+2. Review and edit the mapping in a web UI, and see a preview with errors before exporting.
+3. Deterministic transforms for the common cases; AI only as a last resort, on distinct values, batched and cached.
+4. Measure quality with reproducible **evals** instead of "it seems to work".
+5. Zero cost: develop, test and run CI without paying anything.
+6. Simple code that can be explained line by line.
 
-## 3. No-objetivos (fuera de alcance, a propósito)
+## 3. Non-goals (out of scope on purpose)
 
-- Autenticación y multiusuario. Se explica en el README, en la sección de producción.
-- Persistir los datos importados. Solo se guarda el log de auditoría.
-- Ficheros enormes y procesamiento asíncrono con colas o Kafka.
-- Esquemas destino configurables por el usuario. El esquema es fijo, aunque está definido en un solo sitio para que cambiarlo sea fácil.
-- Despliegue en Kubernetes u OpenShift. Eso es el proyecto mini-onemesh.
+- Authentication and multi-user support (covered in the README's production section).
+- Persisting the imported data. Only the audit log is stored.
+- Very large files and asynchronous processing with queues or Kafka.
+- User-configurable target schemas. The schema is fixed, but defined in one place so changing it is easy.
+- Deployment to Kubernetes or OpenShift (a separate project).
 
-## 4. Esquema destino
+## 4. Target schema
 
-| Campo | Tipo | Obligatorio | Validación |
-|---|---|---|---|
-| `first_name` | string | sí | no vacío |
-| `last_name` | string | sí | no vacío |
-| `email` | string | no | formato email |
-| `phone` | string | no | E.164 (`+34612345678`) |
-| `amount_due` | decimal | sí | ≥ 0, dos decimales |
-| `due_date` | date | no | ISO 8601 (`2026-11-20`) |
-| `external_id` | string | sí | único dentro del fichero |
-
----
-
-## 5. Decisiones (ADR)
-
-### ADR-001 · Monorepo con backend y frontend
-- **Estado:** Aceptado
-- **Contexto:** Una sola persona, un solo producto y cambios que suelen tocar las dos partes a la vez (por ejemplo, un campo nuevo en la API).
-- **Decisión:** Un repositorio con `backend/`, `frontend/`, `evals/` y `docs/`, y un `Makefile` en la raíz con los comandos comunes (`make dev`, `make test`, `make eval`).
-- **Alternativas:** dos repositorios separados. Se descarta porque obliga a coordinar versiones y PRs sin aportar nada a esta escala.
-- **Consecuencias:** El CI usa filtros por ruta para no ejecutar los tests del frontend si solo cambia el backend.
-
-### ADR-002 · Backend en Python con FastAPI, Pydantic v2 y uv
-- **Estado:** Aceptado
-- **Contexto:** La oferta pide FastAPI. Pydantic sirve a la vez para validar la API y la salida del LLM.
-- **Decisión:** Python 3.12+, FastAPI, Pydantic v2 y pydantic-settings para la configuración, gestionado con **uv**. Lectura de CSV con la librería estándar `csv` más `charset-normalizer` para detectar la codificación (**sin pandas**).
-- **Alternativas:** pandas, que es más cómodo pero es una dependencia pesada que infiere tipos de forma silenciosa, justo lo contrario de lo que queremos; Node para todo el stack, descartado porque la oferta pide FastAPI.
-- **Consecuencias:** Más control sobre los tipos (todo se lee como texto y se transforma de forma explícita). Calidad con ruff, mypy en modo estricto y pytest.
-
-### ADR-003 · Frontend en React, TypeScript, Vite, TanStack Query y Zod
-- **Estado:** Aceptado
-- **Contexto:** La oferta pide React y TypeScript, y es una herramienta interna con formularios y tablas.
-- **Decisión:**
-  - Vite + React + TypeScript en modo estricto.
-  - TanStack Query para el estado del servidor.
-  - Tipos generados desde el OpenAPI del backend (`openapi-typescript`), más Zod para validar en tiempo de ejecución.
-  - CSS sencillo con un componente de tabla propio, sin librerías de UI pesadas.
-- **Alternativas:** Next.js, innecesario porque no hay SSR ni SEO; Redux, innecesario porque el estado del servidor lo gestiona TanStack Query.
-- **Consecuencias:** Si cambia la API, los tipos del frontend se regeneran y `tsc` falla allí donde se rompa el contrato.
-
-### ADR-004 · Proveedor de LLM intercambiable, con Ollama por defecto
-- **Estado:** Aceptado
-- **Contexto:** El objetivo es coste cero. La máquina tiene 8 GB de RAM. Queremos poder comparar modelos con las evals.
-- **Decisión:**
-  - Una interfaz `LLMProvider` con un solo método: `complete_json(prompt, schema) -> dict`.
-  - Tres implementaciones:
-    - `OllamaProvider` (por defecto): usa la API local `http://localhost:11434` con **structured outputs** (parámetro `format` con el JSON Schema de Pydantic) y `temperature=0`.
-    - `ClaudeProvider` (opcional): solo si existe `ANTHROPIC_API_KEY`.
-    - `FakeProvider`: para los tests, devuelve respuestas grabadas.
-  - Se elige con la variable `LLM_PROVIDER`.
-  - **Modelo por defecto:** `qwen2.5:3b` (~2 GB), con buen JSON para su tamaño y apto para 8 GB. Alternativa: `llama3.2:3b`. El modelo es configurable (`LLM_MODEL`).
-- **Alternativas:** solo Claude (cuesta dinero y necesita clave); modelos de 7–8B (no caben bien con 8 GB de RAM junto al resto).
-- **Consecuencias:** Un modelo de 3B se equivoca más. Lo compensamos con validación estricta, reintento, heurísticas de respaldo y revisión humana, y lo medimos con las evals. El sistema está diseñado para funcionar bien con un modelo débil.
-
-### ADR-005 · Propuesta de mapeo: LLM + validación + respaldo heurístico
-- **Estado:** Aceptado
-- **Contexto:** El LLM puede devolver JSON inválido, columnas que no existen o transformaciones inventadas.
-- **Decisión:**
-  1. Se perfila cada columna: nombre, 5 valores de muestra, número de valores únicos y porcentaje de vacíos. **Nunca se envía el fichero completo.**
-  2. El prompt incluye el esquema destino, el **catálogo cerrado de transformaciones** y el perfil de las columnas.
-  3. La respuesta se valida con Pydantic (`MappingProposal`): la columna origen debe existir, la transformación debe estar en el catálogo y la confianza debe estar entre 0 y 1.
-  4. Si falla la validación, **un reintento** que incluye el error. Si vuelve a fallar, se usa el **respaldo heurístico**: similitud de nombres (`difflib`) más diccionario de sinónimos (`correo → email`, `importe → amount_due`…).
-  5. El prompt está versionado (`PROMPT_VERSION`) y la versión se guarda en el log y en la clave de caché.
-- **Alternativas:** dejar que el LLM escriba código de transformación libre. Se descarta: no es determinista, es inseguro y no se puede revisar.
-- **Consecuencias:** El usuario siempre recibe una propuesta, aunque el modelo falle. Cada campo indica su origen (`llm` o `heuristic`) y su confianza.
-
-### ADR-006 · Transformaciones deterministas como catálogo de funciones con nombre
-- **Estado:** Aceptado
-- **Contexto:** En el sistema original se usaba JSONata. Aquí prima que el proyecto se entienda y se pruebe fácilmente.
-- **Decisión:**
-  - Un registro de funciones Python puras con nombre: `trim`, `lowercase_trim`, `parse_eu_number`, `parse_us_number`, `parse_date(format)`, `normalize_phone(default_country)`, `split_name_first/last` (con IA), `constant(value)` y `map_values(dict)`.
-  - Cada una devuelve un valor o un error de validación, nunca lanza excepciones sin controlar.
-  - Las reglas *if/else* sencillas se expresan con `map_values`.
-- **Alternativas:** JSONata con `jsonata-python`. Es más potente y se parece más a la historia original, pero añade un lenguaje que hay que explicar. Queda anotado como mejora futura en el README.
-- **Consecuencias:** Tests unitarios por función. El catálogo es la "lista blanca" que ve el LLM.
-
-### ADR-007 · Transformaciones con IA: valores únicos, lotes y caché
-- **Estado:** Aceptado
-- **Contexto:** Llamar al modelo una vez por fila es lento, caro e inconsistente: el mismo valor puede transformarse distinto en dos filas.
-- **Decisión:**
-  1. Se extraen los **valores únicos** de la columna.
-  2. Se buscan en la **caché**. La clave es `sha256(transform, prompt_version, model, valor_normalizado)`.
-  3. Los que faltan van al modelo **en lotes de 20**, con salida estructurada `{valor: resultado}`.
-  4. Los resultados se guardan en caché con un TTL de 30 días.
-  5. Se aplican a todas las filas con un diccionario.
-  - Caché detrás de una interfaz `Cache` con dos implementaciones: `RedisCache` (si existe `REDIS_URL`) e `InMemoryCache` (por defecto). Así el proyecto funciona sin instalar Redis.
-  - La respuesta incluye estadísticas: filas, valores únicos, aciertos de caché, llamadas al modelo y tiempo.
-- **Alternativas:** caché semántica por similitud. Se descarta porque añade complejidad y aquí basta la coincidencia exacta.
-- **Consecuencias:** Consistencia garantizada dentro del fichero y entre ficheros. Las estadísticas son la cifra que se enseña en la demo.
-
-### ADR-008 · Almacenamiento mínimo: ficheros en memoria y log de auditoría en SQLite
-- **Estado:** Aceptado
-- **Contexto:** Sin multiusuario ni persistencia de datos, una base de datos completa sería excesiva.
-- **Decisión:**
-  - El CSV subido se guarda en memoria con un id (TTL de 1 h) y unos límites: **10 MB y 50.000 filas**.
-  - Log de auditoría en **SQLite**: quién (usuario fijo `demo`), qué fichero (hash, no contenido), mapeo final, versión del prompt, modelo, estadísticas y fecha. Solo se añaden registros, no hay endpoints de borrado.
-- **Alternativas:** PostgreSQL. Se pospone a la sección de producción.
-- **Consecuencias:** Si se reinicia el backend, se pierden las subidas en curso. Es aceptable en una demo.
-
-### ADR-009 · Evals reproducibles y gratis, también en CI
-- **Estado:** Aceptado
-- **Contexto:** Hay que poder responder "¿cómo sabes que funciona?" con números.
-- **Decisión:**
-  - `evals/datasets/`: unos 15 CSV inventados con estilos distintos (español, inglés, separador `;`, decimales con coma, columnas extra, cabeceras crípticas), cada uno con su `expected_mapping.json`.
-  - `evals/name_split.jsonl`: unos 60 nombres con su separación correcta (compuestos, dos apellidos, partículas como "de la").
-  - Métricas: **precisión del mapeo por campo**, **precisión de las transformaciones con IA**, **% de respaldo heurístico**, y latencia media.
-  - `make eval` lo ejecuta en local con Ollama y guarda el informe en `evals/results/<fecha>-<modelo>.md`.
-  - **CI:** un job instala Ollama en el runner de GitHub (gratis en repos públicos), descarga el modelo y ejecuta las evals cuando cambian `prompts/`, `mapping/` o `evals/`, o a mano. Falla si la precisión del mapeo baja del umbral (inicialmente **85 %**, se ajusta tras la primera medición).
-- **Alternativas:** evals solo en local. Más simple, pero el PR no queda protegido.
-- **Riesgos:** si el job tarda demasiado en CPU (más de unos 15 min), pasa a ejecución manual o nocturna con un modelo de 1,5B.
-- **Consecuencias:** Los tests unitarios **nunca** llaman a un modelo real (siempre `FakeProvider`). Solo las evals usan un modelo real.
-
-### ADR-010 · Estrategia de tests
-- **Estado:** Aceptado
-- **Decisión:**
-  - **Backend:** pytest. Tests unitarios por transformación, tests del mapeador con `FakeProvider` (incluidos JSON inválido, columna inexistente, reintento y respaldo heurístico) y tests de la API con `TestClient` y `dependency_overrides`. Cobertura del **100 %** (`--cov-fail-under=100`).
-  - **Frontend:** Vitest + Testing Library para la tabla de mapeo y los estados de carga y error. La API se simula con MSW.
-  - Frontend también al **100 %** de cobertura (umbrales de Vitest).
-  - Sin e2e con navegador en esta versión (se menciona como mejora).
-- **Consecuencias:** El CI es rápido, determinista y sin claves.
-
-### ADR-011 · Seguridad y privacidad
-- **Estado:** Aceptado
-- **Decisión:**
-  - Solo datos inventados en el repositorio. Las claves van en `.env`, que está en `.gitignore`; existe `.env.example` sin valores. Escaneo de secretos con **gitleaks** en pre-commit y en CI.
-  - Límites de tamaño y de tipo de fichero en la subida.
-  - **Protección contra CSV injection** al exportar: si una celda empieza por `=`, `+`, `-` o `@`, se le antepone `'`.
-  - Al modelo solo le llegan muestras de 5 valores por columna y, en las transformaciones con IA, solo la columna afectada.
-  - Con Ollama, los datos **no salen de la máquina**.
-- **Consecuencias:** Se documentan en el README los riesgos de producción: PII, prompt injection en los valores de las celdas y retención de datos.
-
-### ADR-012 · Ejecución: nativa por defecto y Docker opcional
-- **Estado:** Aceptado
-- **Contexto:** Con 8 GB de RAM, Docker Desktop y Ollama a la vez van justos. Además, Ollama en Docker sobre Mac no usa la GPU.
-- **Decisión:**
-  - Desarrollo **nativo**: `make dev` arranca el backend (uvicorn) y el frontend (Vite); Ollama corre en el Mac.
-  - Se incluyen `Dockerfile`s (**usuario no root, puerto alto**, listos para OpenShift) y un `docker-compose.yml` con backend, frontend y Redis, que se conecta a Ollama del host vía `host.docker.internal`. Se pueden probar con Colima, más ligero que Docker Desktop, o directamente en el CI (build de las imágenes).
-- **Consecuencias:** Las imágenes se construyen y escanean (Trivy) en CI aunque no se usen a diario en local. Se reutilizan en mini-onemesh.
-
-### ADR-013 · Observabilidad mínima
-- **Estado:** Aceptado
-- **Decisión:**
-  - Logs estructurados en JSON con `request_id`.
-  - Cada llamada al modelo registra el proveedor, el modelo, la versión del prompt, la latencia, los tokens (si los hay) y si vino de caché.
-  - Endpoints `/healthz` (proceso vivo) y `/readyz` (Ollama accesible y caché disponible).
-- **Alternativas:** OpenTelemetry completo. Se pospone a mini-onemesh.
-
-### ADR-014 · Calidad de código y flujo de trabajo
-- **Estado:** Aceptado
-- **Decisión:**
-  - Rama `main` protegida; cada cambio entra por PR con CI en verde y squash merge.
-  - Conventional Commits (`feat:`, `fix:`, `chore:`…).
-  - pre-commit con ruff, ruff-format, mypy, eslint, prettier y gitleaks.
-  - **Sin operadores ternarios** (ni `a if c else b` en Python ni `c ? a : b` en TypeScript): se prefieren `if` explícitos por legibilidad. ESLint `no-ternary` en el frontend.
-- **Consecuencias:** El historial del repositorio cuenta la historia del proyecto PR a PR.
+| Field | Type | Required | Validation | Transforms the model may choose |
+|---|---|---|---|---|
+| `external_id` | string | yes | non-empty, unique in the file | `trim` |
+| `first_name` | string | yes | non-empty | `trim`, `split_name_first` |
+| `last_name` | string | yes | non-empty | `trim`, `split_name_last` |
+| `email` | email | no | email format | `lowercase_trim`, `trim` |
+| `phone` | phone | no | E.164 (`+34612345678`) | `normalize_phone` |
+| `amount_due` | decimal | yes | ≥ 0, two decimals | `parse_eu_number`, `parse_us_number` |
+| `due_date` | date | no | ISO 8601 (`2026-11-20`) | `parse_date` |
 
 ---
 
-## 6. Arquitectura
+## 5. Decisions (ADRs)
 
-```
-┌──────────────────────┐   REST/JSON   ┌───────────────────────────────────────┐
-│ frontend (React/TS)  │ ────────────▶ │ backend (FastAPI)                     │
-│ 1. Subir CSV         │               │ POST /files            → perfil       │
-│ 2. Revisar mapeo     │ ◀──────────── │ POST /files/{id}/suggest → propuesta  │
-│ 3. Vista previa      │               │ POST /files/{id}/preview → filas+errores
-│ 4. Exportar          │               │ POST /files/{id}/export  → CSV + audit│
-└──────────────────────┘               │                                       │
-                                       │ ingest/  mapping/  transforms/        │
-                                       │ ai_transforms/  llm/  cache/  audit/  │
-                                       └──────┬───────────────┬────────────────┘
-                                              │               │
-                                   ┌──────────▼───┐   ┌───────▼────────────┐
-                                   │ Cache        │   │ LLMProvider        │
-                                   │ memoria|Redis│   │ Ollama|Claude|Fake │
-                                   └──────────────┘   └────────────────────┘
-                                                      SQLite (audit log)
-```
+### ADR-001 · Monorepo with backend and frontend
+- **Status:** Accepted
+- **Context:** One person, one product, and changes that often touch both sides (a new API field, say).
+- **Decision:** One repository with `backend/`, `frontend/`, `evals/` and `docs/`, and a root `Makefile` with the common commands.
+- **Alternatives:** two repositories. Rejected: it forces coordinating versions and PRs for no gain at this size.
+- **Consequences:** CI uses path filters so frontend tests don't run when only the backend changes.
 
-## 7. Riesgos
+### ADR-002 · Python backend with FastAPI, Pydantic v2 and uv
+- **Status:** Accepted
+- **Context:** The target role asks for FastAPI. Pydantic validates both the API and the model's output.
+- **Decision:** Python 3.12+, FastAPI, Pydantic v2, pydantic-settings, managed with **uv**. CSV parsing with the standard `csv` module plus `charset-normalizer` (**no pandas**).
+- **Alternatives:** pandas (convenient, but heavy, and it infers types silently: the opposite of what we want); Node for everything.
+- **Consequences:** Full control over types (everything is read as text and transformed explicitly). ruff, mypy `--strict`, pytest.
 
-| Riesgo | Probabilidad | Mitigación |
+### ADR-003 · React, TypeScript, Vite, TanStack Query and Zod frontend
+- **Status:** Accepted
+- **Decision:** Vite + React + strict TypeScript; TanStack Query for server state; types generated from the backend's OpenAPI, plus Zod for runtime validation; plain CSS.
+- **Alternatives:** Next.js (no SSR or SEO needed); Redux (server state belongs to TanStack Query).
+- **Consequences:** If the API changes, the types are regenerated and `tsc` fails where the contract breaks; a CI job fails if they drift.
+- **Notes:** TypeScript 6 (typescript-eslint doesn't support 7 yet); npm ≥ 11 (npm 10.9 crashes resolving peers); Vitest 5 (Vitest 3 pulled critical advisories).
+
+### ADR-004 · Pluggable model provider, Ollama by default
+- **Status:** Accepted
+- **Context:** Zero cost; 8 GB of RAM; we want to compare models with evals.
+- **Decision:** An `LLMProvider` interface (`complete_json(prompt, schema)`, `is_ready()`). `OllamaProvider` (default, local API, **structured outputs** via `format` + JSON Schema, `temperature: 0`) and `FakeProvider` for tests; an optional Claude provider later. Default model **`qwen2.5:3b`** (~2 GB).
+- **Alternatives:** Claude only (costs money, needs a key); 7–8B models (don't fit well in 8 GB next to everything else).
+- **Consequences:** A 3B model makes more mistakes. We compensate with strict checks, a retry, heuristic fallbacks and human review, and we measure it with evals.
+
+### ADR-005 · Mapping proposal: model + validation + heuristic fallback
+- **Status:** Accepted (extended by ADR-015)
+- **Decision:**
+  1. Profile each column: name, 5 distinct samples, distinct count, empty ratio. **The whole file is never sent.**
+  2. The prompt lists the target schema, the **closed catalog of transforms** and the column profiles; samples are marked as data.
+  3. The answer is validated with Pydantic (`LLMMappingAnswer`) and against reality: the column exists, the transform is allowed, params are right.
+  4. On failure, **one retry** with the errors in the prompt; then **header heuristics** (synonyms in several languages, whole-word and fuzzy matching, sample-based format detection).
+  5. The prompt is versioned (`PROMPT_VERSION`) and the version goes into logs and cache keys.
+- **Alternatives:** letting the model write transform code (non-deterministic, unsafe, unreviewable).
+- **Consequences:** The user always gets a proposal, and each field says where it came from (`llm`, `heuristic`, `user`) and how far to trust it.
+
+### ADR-006 · Deterministic transforms as a catalog of named functions
+- **Status:** Accepted
+- **Decision:** Pure Python functions with names (`trim`, `lowercase_trim`, `parse_eu_number`, `parse_us_number`, `parse_date(format)`, `normalize_phone(default_country)`, `constant(value)`, `map_values(table)`), each returning `Ok(value)` or `Err(reason)`, never raising. `constant` and `map_values` are **for people only**: in a live run the model picked `constant` for the id column.
+- **Alternatives:** JSONata (more powerful, closer to the original system, but another language to explain; listed as a future improvement).
+- **Consequences:** One test per function, plus property-based tests; the catalog is the model's whitelist.
+
+### ADR-007 · AI transforms: distinct values, batches and cache
+- **Status:** Accepted
+- **Decision:** For `split_name_first` / `split_name_last`: distinct values → cache lookup (key = `sha256(transform | prompt_version | model | value)`) → misses to the model in **batches of 20** → accept only answers where first + last rebuild the input **letter by letter** → retry the failures once → cache for 30 days → apply to every row. `InMemoryCache` by default, `RedisCache` when `REDIS_URL` is set.
+- **Alternatives:** one call per row (slow, costly, inconsistent); semantic cache (exact repeats are enough here).
+- **Consequences:** Consistent results within and across files; stats (rows, distinct, cache hits, model calls) shown in the UI.
+
+### ADR-008 · Minimal storage: uploads in memory, audit log in SQLite
+- **Status:** Accepted
+- **Decision:** Uploads in memory with an id, a 1 h TTL and limits (**10 MB, 50,000 rows**). Audit log in **SQLite**, append-only (triggers reject UPDATE and DELETE): user, file name, **SHA-256 of the file (never its content)**, final mapping, model, AI stats.
+- **Alternatives:** PostgreSQL (deferred to the production section).
+- **Consequences:** Restarting the backend loses in-flight uploads: acceptable for a demo.
+
+### ADR-009 · Reproducible, free evals, also in CI
+- **Status:** Accepted
+- **Decision:** 15 fake CSVs in different styles with hand-labelled `*.expected.json`, and 60 names with their correct split. Metrics: **column right**, **column + transform + params right** (the threshold uses this one), name split exact match, latency. `make eval` writes a report to `evals/results/`; CI runs it on Ollama (CPU) when prompts, transforms or the eval set change, and fails below **90 %**.
+- **Alternatives:** an LLM judge (there is an exact answer here; a judge adds noise and cost); local-only evals.
+- **Consequences:** Unit tests **never** call a real model; only the evals do. The CI job takes ~20–30 min on CPU.
+
+### ADR-010 · Testing strategy
+- **Status:** Accepted
+- **Decision:** pytest (unit tests per transform, mapping tests with `FakeProvider`, API tests with `TestClient`), Vitest + Testing Library + MSW for the UI. **100 % branch coverage** on both sides. A **mutation spot-check** on every PR. No browser end-to-end tests yet (listed as an improvement).
+
+### ADR-011 · Security and privacy
+- **Status:** Accepted
+- **Decision:** fake data only; secrets in `.env` (ignored) with a value-less `.env.example`; **gitleaks** in pre-commit and CI; upload size and type limits; **CSV injection protection** on export; the model only sees 5 samples per column, and only the affected column for AI transforms; with Ollama, data never leaves the machine.
+
+### ADR-012 · Native development, optional Docker
+- **Status:** Accepted
+- **Context:** With 8 GB of RAM, Docker Desktop plus Ollama is tight, and Ollama in Docker on a Mac can't use the GPU.
+- **Decision:** Native development (`make dev`); Dockerfiles (non-root, high port, OpenShift-friendly) and a compose file are a separate step.
+
+### ADR-013 · Minimal observability
+- **Status:** Accepted
+- **Decision:** JSON logs with a `request_id`; every model call logs provider, model, latency and tokens; `/healthz` (process up) and `/readyz` (model reachable).
+- **Alternatives:** full OpenTelemetry (production section).
+
+### ADR-014 · Code quality and workflow
+- **Status:** Accepted
+- **Decision:** every change through a PR with green CI and squash merge; Conventional Commits; pre-commit (ruff, mypy, gitleaks); **no ternary operators** (explicit `if` for readability; ESLint `no-ternary` and a CI grep for Python).
+
+### ADR-015 · Type-check the model's answer against the data
+- **Status:** Accepted (added after the first eval run)
+- **Context:** The first eval run scored 94 % on columns but only **65 % on column + transform**: the model lowercased ids, split columns that were already split, misread number formats, and the heuristic took "Amount Due" for the due date.
+- **Decision:** Before accepting the model's choice for a field:
+  - the transform must be one of the field's **fitting transforms** (§4);
+  - the transform (and the field's validation) is **dry-run on the column's samples**; if half or more fail, the answer is sent back with the reason;
+  - `split_name_*` only on columns where most samples hold two or more words;
+  - heuristics never reuse a column the model already assigned (except the full-name pair).
+  The name check became case-sensitive. Prompts moved to `mapping_v2` and `split_name_v2`.
+- **Alternatives:** prompt wording only (helps, but doesn't guarantee anything); a bigger model (doesn't fit the zero-cost, 8 GB constraint).
+- **Consequences:** Mapping accuracy **64.8 % → 97.1 %**, name split **93.3 % → 96.7 %**; latency per proposal **13 s → 23 s** because of retries. `maría lópez` now fails visibly instead of silently becoming `López`.
+
+---
+
+## 6. Risks
+
+| Risk | Likelihood | Mitigation |
 |---|---|---|
-| El modelo de 3B mapea mal | Media | Validación, reintento, respaldo heurístico, revisión humana y evals para medirlo |
-| Ollama va lento o se queda sin memoria con 8 GB | Media | Modelo de 3B (o 1,5B), cerrar apps, lotes pequeños |
-| El job de evals en CI es demasiado lento | Media | Ejecución manual o nocturna, modelo más pequeño |
-| Falta de tiempo antes del martes 24 | Alta | Orden de PRs pensado para tener una demo útil tras el PR 7; el resto se puede dejar como mejora |
-| Código difícil de explicar | Media | PRs pequeños, revisión de tests en cada PR y notas privadas |
+| The 3B model maps badly | Medium | Answer checks, a retry, heuristics, human review, evals to measure it |
+| Ollama slow or out of memory on 8 GB | Medium | 3B model, small batches |
+| The evals CI job is too slow | Medium | Path filters, model cache; manual or nightly runs if needed |
+| Code hard to explain | Medium | Small PRs, test reviews on every PR |
 
-## 8. Definición de terminado
+## 7. Definition of done
 
-- `make dev` funciona en un Mac limpio siguiendo el README.
-- CI en verde: lint, tipos, tests, cobertura del 100 %, gitleaks y build de imágenes.
-- Informe de evals con Ollama publicado en `evals/results/`.
-- README en inglés con diagrama, GIF de la demo, resultados de las evals y la sección *"What I'd change for production"*.
-- Cada módulo y cada decisión de este documento se pueden explicar sin mirar el código.
+- `make dev` works on a clean Mac following the README.
+- Green CI: lint, types, tests, 100 % coverage, gitleaks, generated types in sync, evals ≥ 90 %.
+- Eval reports committed in `evals/results/`.
+- English README with screenshots, eval results and a production section.
