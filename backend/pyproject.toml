@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "LLM-assisted CSV column mapping with deterministic transforms"
 requires-python = ">=3.12"
 dependencies = [
+    "charset-normalizer>=3.5.2",
     "fastapi>=0.165.0",
     "pydantic-settings>=2.16.3",
+    "python-multipart>=0.0.34",
     "uvicorn[standard]>=0.54.0",
 ]
 
