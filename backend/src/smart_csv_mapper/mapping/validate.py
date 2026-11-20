@@ -16,8 +16,9 @@ def looks_like_full_names(samples: list[str]) -> bool:
 def dry_run(item: LLMFieldMapping, spec: TransformSpec, column: ColumnProfile) -> str | None:
     """Try the chosen transform (and the field's validation) on the column's samples.
 
-    Rejects the choice when half or more of the samples fail: e.g. parse_eu_number on '1,250.50', or a date
-    format that doesn't match. This checks the model's answer against the data, not its words.
+    Rejects the choice when half or more of the samples fail: e.g. parse_eu_number on
+    '1,250.50', or a date format that doesn't match. This checks the model's answer
+    against the data, not against its own words.
     """
     if spec.kind == "ai":
         if not looks_like_full_names(column.samples):
