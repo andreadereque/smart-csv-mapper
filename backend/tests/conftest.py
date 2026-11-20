@@ -10,8 +10,13 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
-def settings() -> Settings:
-    return Settings(llm_provider="fake", max_upload_mb=1, max_rows=100)
+def settings(tmp_path: Path) -> Settings:
+    return Settings(
+        llm_provider="fake",
+        max_upload_mb=1,
+        max_rows=100,
+        audit_db_path=str(tmp_path / "audit.sqlite"),
+    )
 
 
 @pytest.fixture

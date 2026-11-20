@@ -1,5 +1,6 @@
 """Upload a CSV and read back its column profile."""
 
+import hashlib
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
@@ -61,12 +62,16 @@ async def upload_file(
     if len(raw) > limit:
         raise HTTPException(413, f"The file is larger than {settings.max_upload_mb} MB.")
     parsed = parse_csv(raw, settings.max_rows)
-    return to_profile(store.put(filename, parsed))
+    return to_profile(store.put(filename, parsed, hashlib.sha256(raw).hexdigest()))
 
 
 @router.get("/{file_id}")
 def get_file(file_id: str, store: Annotated[FileStore, Depends(get_store)]) -> FileProfile:
+    return to_profile(get_stored(file_id, store))
+
+
+def get_stored(file_id: str, store: FileStore) -> StoredFile:
     try:
-        return to_profile(store.get(file_id))
+        return store.get(file_id)
     except FileNotFound:
         raise HTTPException(404, "File not found or expired.") from None
