@@ -11,3 +11,17 @@ repos:
     rev: v8.24.2
     hooks:
       - id: gitleaks
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff (backend)
+        entry: bash -c 'cd backend && uv run ruff check --fix . && uv run ruff format .'
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: false
+      - id: mypy
+        name: mypy (backend)
+        entry: bash -c 'cd backend && uv run mypy src tests'
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: false
