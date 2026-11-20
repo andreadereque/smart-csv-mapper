@@ -7,7 +7,7 @@ from smart_csv_mapper.ingest.profile import ColumnProfile
 from smart_csv_mapper.schema import TARGET_SCHEMA
 from smart_csv_mapper.transforms.catalog import LLM_TRANSFORMS
 
-PROMPT_VERSION = "mapping_v1"
+PROMPT_VERSION = "mapping_v2"
 TEMPLATE = resources.files("smart_csv_mapper.mapping.prompts").joinpath(f"{PROMPT_VERSION}.md")
 
 
@@ -17,7 +17,10 @@ def _schema_lines() -> str:
         required = "optional"
         if field.required:
             required = "required"
-        lines.append(f"- {field.name} ({field.type}, {required}): {field.description}")
+        allowed = " or ".join(field.fitting_transforms)
+        lines.append(
+            f"- {field.name} ({field.type}, {required}): {field.description} Transform: {allowed}."
+        )
     return "\n".join(lines)
 
 

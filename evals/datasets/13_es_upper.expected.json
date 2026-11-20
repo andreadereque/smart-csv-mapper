@@ -1,0 +1,33 @@
+{
+  "external_id": {
+    "source": "ID CLIENTE",
+    "transform": "trim"
+  },
+  "first_name": {
+    "source": "NOMBRE",
+    "transform": "trim"
+  },
+  "last_name": {
+    "source": "APELLIDOS",
+    "transform": "trim"
+  },
+  "email": {
+    "source": "CORREO ELECTRONICO",
+    "transform": "lowercase_trim"
+  },
+  "phone": {
+    "source": "TELEFONO",
+    "transform": "normalize_phone"
+  },
+  "amount_due": {
+    "source": "SALDO",
+    "transform": "parse_eu_number"
+  },
+  "due_date": {
+    "source": "FECHA",
+    "transform": "parse_date",
+    "params": {
+      "format": "%d/%m/%Y"
+    }
+  }
+}

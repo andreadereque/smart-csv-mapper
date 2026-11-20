@@ -38,6 +38,27 @@ full-name column mapped to `split_name_first` / `split_name_last`; export in 32 
 3 model calls** (5 already cached by the preview); 299 rows exported, 1 skipped (invalid email on row 150).
 The model proposed `lowercase_trim` for the id column, which a person fixes in review: that is the point.
 
+## Evals
+
+`make eval` runs 15 hand-labelled CSVs (Spanish, English, UK, German, Portuguese and French headers,
+abbreviations, distractor columns, `Surname, First`, currency symbols…) and 60 hard names against the
+local model, writes a report to `evals/results/` and fails below 90 %. CI runs it on Ollama (CPU) when a
+prompt, a transform or the eval set changes.
+
+| qwen2.5:3b, same model | prompt v1 | prompt v2 + checks |
+|---|---|---|
+| Mapping: column **and** transform right | 64.8 % | **97.1 %** |
+| Mapping: column right | 94.3 % | 97.1 % |
+| Name split, exact | 93.3 % | **96.7 %** |
+| Time per proposal (M2, 8 GB) | 13.3 s | 22.6 s |
+
+What v1 got wrong, and what fixed it: `lowercase_trim` on ids (13/15 files), `split_name` on columns that
+were already split, US numbers read as European, and a heuristic that took "Amount **Due**" as the due
+date. v2 adds deterministic checks on the model's answer (transforms allowed per field type; a dry run of
+the transform on the column's samples; `split_name` only on columns that hold full names; one column per
+field) and sends violations back for one retry. The name check became case-sensitive: `maría lópez` now
+fails loudly instead of silently becoming `López`. Reports: [v1](evals/results/2026-11-20-qwen2.5-3b-mapping_v1.md), [v2](evals/results/2026-11-20-qwen2.5-3b-mapping_v2.md).
+
 ## Design decisions
 
 - **App factory + settings from the environment** (`create_app`, pydantic-settings): each test builds its own app; no global state.
@@ -65,6 +86,7 @@ The model proposed `lowercase_trim` for the id column, which a person fixes in r
 - **Frontend types come from the backend's OpenAPI** (`npm run gen:api`), and every response is also checked at runtime with Zod schemas that `satisfies` those types: if the contract drifts, `tsc` fails; if a response is wrong anyway, the UI says so instead of crashing. CI regenerates the types and fails if they changed.
 - **The UI never trusts the proposal silently:** low-confidence rows are yellow, every edit is marked "set by you" (and sent as `origin: user`), changing a transform clears its old params, and AI transforms are labelled.
 - **Server state with TanStack Query**, no global store; tests mock only the network, with MSW.
+- **The model's answer is type-checked against the data:** each target field lists the transforms that fit it, and the chosen transform is dry-run on the column's samples; failing half or more of them sends the answer back with the reason.
 - **Uploads live in memory with a 1 h TTL** (10 MB / 50k rows limits); persistence is out of scope.
 
 ## License

@@ -1,0 +1,33 @@
+{
+  "external_id": {
+    "source": "Ref",
+    "transform": "trim"
+  },
+  "first_name": {
+    "source": "Nombre completo",
+    "transform": "split_name_first"
+  },
+  "last_name": {
+    "source": "Nombre completo",
+    "transform": "split_name_last"
+  },
+  "email": {
+    "source": "Email",
+    "transform": "lowercase_trim"
+  },
+  "phone": {
+    "source": "Móvil",
+    "transform": "normalize_phone"
+  },
+  "amount_due": {
+    "source": "Deuda",
+    "transform": "parse_eu_number"
+  },
+  "due_date": {
+    "source": "Fecha",
+    "transform": "parse_date",
+    "params": {
+      "format": "%d/%m/%Y"
+    }
+  }
+}

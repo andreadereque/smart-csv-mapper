@@ -1,0 +1,4 @@
+Nº factura;Cliente;Email;Teléfono;Importe (€);Vencimiento
+F-2026-01;Marta Gil Ruiz;marta@example.com;612 345 678;€ 1.250,50;20/11/2026
+F-2026-02;Pablo Sanz;pablo@example.com;612 345 679;€ 80,00;21/11/2026
+F-2026-03;Sara Mora Díaz;sara@example.com;612 345 680;€ 15,75;22/11/2026

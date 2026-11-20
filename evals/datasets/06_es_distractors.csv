@@ -1,0 +1,4 @@
+Oficina;Referencia;Comercial;Nombre;Apellidos;Notas;Correo;Teléfono;Importe pendiente;Fecha alta;Fecha vencimiento
+Madrid;C-101;Laura Gil;Pablo;Sánchez;Llamar por la tarde;pablo@example.com;612 345 001;250,00;01/01/2025;20/11/2026
+Sevilla;C-102;Laura Gil;Marta;Navarro;;marta@example.com;612 345 002;1.300,00;02/02/2025;21/11/2026
+Bilbao;C-103;Iker Sanz;Raúl;Ortega;Cliente VIP;raul@example.com;612 345 003;75,50;03/03/2025;22/11/2026

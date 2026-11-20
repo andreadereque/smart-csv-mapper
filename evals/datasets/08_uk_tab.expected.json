@@ -1,0 +1,33 @@
+{
+  "external_id": {
+    "source": "Account No",
+    "transform": "trim"
+  },
+  "first_name": {
+    "source": "Forename",
+    "transform": "trim"
+  },
+  "last_name": {
+    "source": "Surname",
+    "transform": "trim"
+  },
+  "email": {
+    "source": "Email Address",
+    "transform": "lowercase_trim"
+  },
+  "phone": {
+    "source": "Telephone",
+    "transform": "normalize_phone"
+  },
+  "amount_due": {
+    "source": "Outstanding (£)",
+    "transform": "parse_us_number"
+  },
+  "due_date": {
+    "source": "Due Date",
+    "transform": "parse_date",
+    "params": {
+      "format": "%d/%m/%Y"
+    }
+  }
+}

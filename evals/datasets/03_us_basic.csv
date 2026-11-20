@@ -1,0 +1,4 @@
+customer_id,first_name,last_name,email,phone,amount,due_date
+A-9,John,Smith,john@example.com,+1 415 555 0101,"1,250.50",11/20/2026
+A-10,Mary,Jones,mary@example.com,+1 415 555 0102,980.00,12/01/2026
+A-11,Kevin,Brown,kevin@example.com,+1 415 555 0103,45.10,01/15/2027

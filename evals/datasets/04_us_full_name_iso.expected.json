@@ -1,0 +1,33 @@
+{
+  "external_id": {
+    "source": "id",
+    "transform": "trim"
+  },
+  "first_name": {
+    "source": "Full Name",
+    "transform": "split_name_first"
+  },
+  "last_name": {
+    "source": "Full Name",
+    "transform": "split_name_last"
+  },
+  "email": {
+    "source": "E-mail",
+    "transform": "lowercase_trim"
+  },
+  "phone": {
+    "source": "Phone Number",
+    "transform": "normalize_phone"
+  },
+  "amount_due": {
+    "source": "Balance",
+    "transform": "parse_us_number"
+  },
+  "due_date": {
+    "source": "Due",
+    "transform": "parse_date",
+    "params": {
+      "format": "%Y-%m-%d"
+    }
+  }
+}

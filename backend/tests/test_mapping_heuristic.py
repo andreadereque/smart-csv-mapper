@@ -148,3 +148,9 @@ def test_separate_name_columns_win_over_a_generic_name_column() -> None:
 
 def test_no_columns_means_unmapped() -> None:
     assert heuristic_field("email", []).source is None
+
+
+def test_columns_already_taken_are_not_reused() -> None:
+    columns = [column("Amount Due", "100.00"), column("Notes", "x")]
+    assert heuristic_field("due_date", columns).source == "Amount Due"
+    assert heuristic_field("due_date", columns, frozenset({"Amount Due"})).source is None

@@ -1,0 +1,33 @@
+{
+  "external_id": {
+    "source": "cod_cli",
+    "transform": "trim"
+  },
+  "first_name": {
+    "source": "nom",
+    "transform": "trim"
+  },
+  "last_name": {
+    "source": "ape",
+    "transform": "trim"
+  },
+  "email": {
+    "source": "mail",
+    "transform": "lowercase_trim"
+  },
+  "phone": {
+    "source": "tlf",
+    "transform": "normalize_phone"
+  },
+  "amount_due": {
+    "source": "imp",
+    "transform": "parse_eu_number"
+  },
+  "due_date": {
+    "source": "f_venc",
+    "transform": "parse_date",
+    "params": {
+      "format": "%d/%m/%Y"
+    }
+  }
+}

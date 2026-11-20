@@ -1,0 +1,27 @@
+{
+  "external_id": {
+    "source": "Account",
+    "transform": "trim"
+  },
+  "first_name": {
+    "source": "First",
+    "transform": "trim"
+  },
+  "last_name": {
+    "source": "Last",
+    "transform": "trim"
+  },
+  "email": {
+    "source": null
+  },
+  "phone": {
+    "source": null
+  },
+  "amount_due": {
+    "source": "Amount Due",
+    "transform": "parse_us_number"
+  },
+  "due_date": {
+    "source": null
+  }
+}

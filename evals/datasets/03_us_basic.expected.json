@@ -1,0 +1,33 @@
+{
+  "external_id": {
+    "source": "customer_id",
+    "transform": "trim"
+  },
+  "first_name": {
+    "source": "first_name",
+    "transform": "trim"
+  },
+  "last_name": {
+    "source": "last_name",
+    "transform": "trim"
+  },
+  "email": {
+    "source": "email",
+    "transform": "lowercase_trim"
+  },
+  "phone": {
+    "source": "phone",
+    "transform": "normalize_phone"
+  },
+  "amount_due": {
+    "source": "amount",
+    "transform": "parse_us_number"
+  },
+  "due_date": {
+    "source": "due_date",
+    "transform": "parse_date",
+    "params": {
+      "format": "%m/%d/%Y"
+    }
+  }
+}
