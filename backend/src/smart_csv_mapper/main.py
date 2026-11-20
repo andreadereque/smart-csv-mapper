@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from smart_csv_mapper import __version__
-from smart_csv_mapper.api import files, health
+from smart_csv_mapper.api import catalog, files, health
 from smart_csv_mapper.config import Settings, get_settings
 from smart_csv_mapper.ingest.errors import IngestError
 from smart_csv_mapper.ingest.store import FileStore
@@ -27,4 +27,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(IngestError, ingest_error_handler)
     app.include_router(health.router)
     app.include_router(files.router)
+    app.include_router(catalog.router)
     return app
