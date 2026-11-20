@@ -1,11 +1,18 @@
 import json
 import logging
+import sys
 
 import pytest
+from fastapi import Request, Response
 from fastapi.testclient import TestClient
 
 from smart_csv_mapper.config import Settings, get_settings
-from smart_csv_mapper.logging import REQUEST_ID_HEADER, JsonFormatter, request_id_var
+from smart_csv_mapper.logging import (
+    REQUEST_ID_HEADER,
+    JsonFormatter,
+    request_id_middleware,
+    request_id_var,
+)
 from smart_csv_mapper.main import create_app
 
 
@@ -77,8 +84,22 @@ def test_json_formatter_includes_exception_info() -> None:
     try:
         raise ValueError("boom")
     except ValueError:
-        import sys
-
         record = _record(exc_info=sys.exc_info())
     line = json.loads(JsonFormatter().format(record))
     assert "ValueError: boom" in line["exc_info"]
+
+
+def test_request_id_does_not_leak_after_the_request() -> None:
+    seen: list[str] = []
+
+    async def call_next(_: Request) -> Response:
+        seen.append(request_id_var.get())
+        return Response()
+
+    request = Request({"type": "http", "headers": [(b"x-request-id", b"req-9")]})
+    # Drive the coroutine in *this* context (asyncio.run would use a copy and hide a leak).
+    coroutine = request_id_middleware(request, call_next)
+    with pytest.raises(StopIteration):
+        coroutine.send(None)
+    assert seen == ["req-9"]
+    assert request_id_var.get() == "-"
