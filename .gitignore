@@ -1,2 +1,31 @@
+# private
 NOTES.md
 .env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# node
+node_modules/
+dist/
+coverage/
+
+# data
+*.sqlite
+*.sqlite3
+evals/results/*.tmp
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/
