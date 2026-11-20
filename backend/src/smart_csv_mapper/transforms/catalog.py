@@ -17,6 +17,7 @@ class TransformSpec:
     required_params: tuple[str, ...] = ()
     optional_params: tuple[str, ...] = ()
     free_params: bool = field(default=False)  # map_values: any key is a lookup entry
+    llm_allowed: bool = True  # False = only a person may choose it in the UI
 
 
 CATALOG: dict[str, TransformSpec] = {
@@ -51,15 +52,19 @@ CATALOG: dict[str, TransformSpec] = {
             "Ignore the column and always use {'value': ...}.",
             functions.constant,
             required_params=("value",),
+            llm_allowed=False,
         ),
         TransformSpec(
             "map_values",
             "Map each value through a lookup table, e.g. {'pagado': '0', '*': 'keep'}.",
             functions.map_values,
             free_params=True,
+            llm_allowed=False,
         ),
     ]
 }
+
+LLM_TRANSFORMS = {name: spec for name, spec in CATALOG.items() if spec.llm_allowed}
 
 
 def check_params(spec: TransformSpec, params: dict[str, str]) -> str | None:

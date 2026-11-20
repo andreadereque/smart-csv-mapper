@@ -22,6 +22,7 @@ class TransformOut(BaseModel):
     required_params: list[str]
     optional_params: list[str]
     free_params: bool
+    llm_allowed: bool
 
 
 @router.get("/schema")
@@ -41,6 +42,7 @@ def get_transforms() -> list[TransformOut]:
             required_params=list(s.required_params),
             optional_params=list(s.optional_params),
             free_params=s.free_params,
+            llm_allowed=s.llm_allowed,
         )
         for s in CATALOG.values()
     ]

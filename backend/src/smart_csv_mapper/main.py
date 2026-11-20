@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from smart_csv_mapper import __version__
-from smart_csv_mapper.api import catalog, files, health
+from smart_csv_mapper.api import catalog, files, health, mapping
 from smart_csv_mapper.config import Settings, get_settings
 from smart_csv_mapper.ingest.errors import IngestError
 from smart_csv_mapper.ingest.store import FileStore
@@ -33,4 +33,5 @@ def create_app(settings: Settings | None = None, llm: LLMProvider | None = None)
     app.include_router(health.router)
     app.include_router(files.router)
     app.include_router(catalog.router)
+    app.include_router(mapping.router)
     return app

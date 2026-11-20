@@ -27,3 +27,6 @@ def test_transforms_endpoint_lists_the_closed_catalog(client: TestClient) -> Non
     assert body["parse_date"]["required_params"] == ["format"]
     assert body["normalize_phone"]["optional_params"] == ["default_country"]
     assert body["map_values"]["free_params"] is True
+    assert body["trim"]["llm_allowed"] is True
+    assert body["constant"]["llm_allowed"] is False
+    assert body["map_values"]["llm_allowed"] is False

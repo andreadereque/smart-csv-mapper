@@ -23,6 +23,10 @@ An LLM **proposes** the column mapping, a person **reviews** it, and transformat
 - **One `LLMProvider` interface** (`complete_json(prompt, schema)`, `is_ready()`), with Ollama by default and a scripted `FakeProvider` for tests. Ollama gets the JSON Schema as `format` (structured outputs) and `temperature: 0`.
 - **Retries only where they help:** network errors, timeouts and 5xx are retried with exponential backoff; 4xx (e.g. model not pulled) fails fast.
 - **`/readyz` checks the model, `/healthz` never does:** a stopped model should take the API out of rotation, not restart it.
+- **Mapping = model proposal, checked against reality.** The prompt (versioned, `mapping_v1`) lists the schema, the allowed transforms and the column profiles; samples are marked as data, not instructions. The answer schema uses enums for targets and transforms.
+- **Semantic validation + one retry:** unknown columns, disallowed transforms, missing params and duplicate targets are sent back to the model once; then the system falls back to header heuristics (synonyms in Spanish and English, whole-word and fuzzy matching, sample-based number and date format detection).
+- **Some transforms are for people only** (`constant`, `map_values`): in a live test the 3B model chose `constant` for the id column, which would have given every row the same id.
+- **Self-reported confidence isn't trusted:** the 3B model says 1.0 for everything, so a score above 0.6 is kept only when the header heuristic points to the same column.
 - **Uploads live in memory with a 1 h TTL** (10 MB / 50k rows limits); persistence is out of scope.
 
 ## License
