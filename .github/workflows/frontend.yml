@@ -1,0 +1,44 @@
+name: frontend
+on:
+  pull_request:
+    paths: ["frontend/**", "backend/src/**", ".github/workflows/frontend.yml"]
+  push:
+    branches: [main]
+    paths: ["frontend/**", "backend/src/**", ".github/workflows/frontend.yml"]
+permissions:
+  contents: read
+defaults:
+  run:
+    working-directory: frontend
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Lint (includes no-ternary) and format
+        run: npm run lint
+      - name: Types
+        run: npm run typecheck
+      - name: Tests (100% coverage)
+        run: npm test
+      - name: Build
+        run: npm run build
+  api-types-in-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: cd ../backend && uv sync --locked
+      - name: Regenerate the API types from the backend
+        run: npm run gen:api
+      - name: Fail if they changed
+        run: git diff --exit-code -- src/api/schema.d.ts

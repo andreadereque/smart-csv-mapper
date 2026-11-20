@@ -56,6 +56,8 @@ The model proposed `lowercase_trim` for the id column, which a person fixes in r
 - **Export refuses invalid rows unless asked** (`skip_invalid`), and says which cell failed and why. Duplicate `external_id`s are errors.
 - **CSV injection protection:** cells starting with `=`, `@`, tab or CR get a leading `'`; `+`/`-` only when the cell is not a plain number or an E.164 phone, so `+34612345678` survives.
 - **Append-only audit log in SQLite** (triggers reject UPDATE and DELETE): user, file name and SHA-256 (never the content), mapping, model and AI stats.
+- **Frontend types come from the backend's OpenAPI** (`npm run gen:api`), and every response is also checked at runtime with Zod schemas that `satisfies` those types: if the contract drifts, `tsc` fails; if a response is wrong anyway, the UI says so instead of crashing. CI regenerates the types and fails if they changed.
+- **Server state with TanStack Query**, no global store; tests mock only the network, with MSW.
 - **Uploads live in memory with a 1 h TTL** (10 MB / 50k rows limits); persistence is out of scope.
 
 ## License
