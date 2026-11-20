@@ -73,9 +73,23 @@ describe("exportCsv", () => {
     );
     await expect(exportCsv("f1", [], false)).rejects.toMatchObject({
       code: "invalid_rows",
-      message: "1 rows have errors.",
+      message: "1 row has errors.",
       invalidRowCount: 1,
       cellErrors: errors,
+    });
+  });
+
+  it("uses the plural for several invalid rows", async () => {
+    server.use(
+      http.post("/api/files/f1/export", () =>
+        HttpResponse.json(
+          { detail: { code: "invalid_rows", invalid_row_count: 2 } },
+          { status: 422 },
+        ),
+      ),
+    );
+    await expect(exportCsv("f1", [], false)).rejects.toMatchObject({
+      message: "2 rows have errors.",
     });
   });
 

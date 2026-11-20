@@ -1,27 +1,90 @@
 # smart-csv-mapper
 
-Upload a CSV with messy, client-specific columns and get clean rows in a fixed target schema.
-An LLM **proposes** the column mapping, a person **reviews** it, and transformations are
-**deterministic** wherever possible. AI is only a fallback, called on **distinct values** and **cached**.
+Every client sends their data in their own format: different column names, orders, number and date
+formats, sometimes a full name where you need first and last name. Mapping each new file by hand takes
+engineering time. **smart-csv-mapper** lets a non-technical user do it in minutes:
 
-> Work in progress. See [docs/PLAN.md](docs/PLAN.md) for the design decisions (ADRs)
-> and [docs/PRS.md](docs/PRS.md) for the delivery plan.
+1. **An LLM proposes** how the file's columns map to a fixed target schema, and which transform each one needs.
+2. **A person reviews** the proposal; low-confidence rows are highlighted.
+3. **Deterministic code** transforms and validates every cell. AI is only used where code can't do the job
+   (splitting full names), on **distinct values only**, **cached**, and **verified**.
 
-- Runs **free and local** with [Ollama](https://ollama.com) (`qwen2.5:3b`); data never leaves the machine.
-- Fake data only.
+Runs **free and local** with [Ollama](https://ollama.com) (`qwen2.5:3b`): the data never leaves the machine.
+All data in this repository is fake.
+
+> A simplified, open re-implementation of a production system I built for client onboarding,
+> written from scratch as a practice and portfolio project.
+
+| Review the proposal | Preview with per-cell errors |
+|---|---|
+| ![Mapping review](docs/img/1-review.jpg) | ![Preview](docs/img/2-preview.jpg) |
+| **Invalid rows are explained before export** | **Export and audit history** |
+| ![Invalid rows](docs/img/3-invalid-rows.jpg) | ![Exported](docs/img/4-exported.jpg) |
+
+## How it works
+
+```mermaid
+flowchart LR
+    U[CSV upload] --> P[Parse as text<br/>encoding + delimiter]
+    P --> PR[Column profiles<br/>5 samples, distinct, empty %]
+    PR --> M{LLM proposal<br/>structured output}
+    M --> V[Checks: real column, allowed transform,<br/>dry run on samples]
+    V -- problems --> M
+    V -- still failing --> H[Header heuristics]
+    V --> R[Human review in the UI]
+    H --> R
+    R --> T[Deterministic transforms<br/>+ schema validation]
+    R --> AI[AI transforms<br/>distinct values → cache → batches → verify]
+    T --> X[Preview / export CSV]
+    AI --> X
+    X --> A[(Append-only audit log)]
+```
+
+- **Only a profile reaches the model**, never the whole file: column names, 5 distinct samples, counts.
+- The model answers in **JSON constrained by a schema** (Ollama structured outputs, `temperature: 0`), choosing
+  only from a **closed catalog of named transforms**.
+- Its answer is **checked against the data**: the column must exist, the transform must fit the field type, and
+  it is **dry-run on the column's samples**. Problems go back to the model once; then header heuristics take over.
+  Self-reported confidence is not trusted: it is capped unless the heuristics agree.
+- **AI transforms run per column**: 1,000 rows with 10 distinct names → 1 model call, and 0 on the next file.
+  A split is accepted only if first + last name rebuild the input **letter by letter**.
+
+## Results
+
+**Evals** (`make eval`): 15 hand-labelled CSVs (Spanish, English, UK, German, Portuguese and French headers,
+abbreviations, distractor columns, `Surname, First`, currency symbols…) and 60 hard names. CI runs them on Ollama
+whenever a prompt, a transform or the eval set changes, and fails below 90 %.
+
+| qwen2.5:3b, same model | prompt v1 | prompt v2 + checks |
+|---|---|---|
+| Mapping: column **and** transform right | 64.8 % | **97.1 %** |
+| Mapping: column right | 94.3 % | 97.1 % |
+| Name split, exact | 93.3 % | **96.7 %** |
+| Time per proposal (M2, 8 GB) | 13.3 s | 22.6 s |
+
+v1 lowercased ids (13/15 files), split columns that were already split, read US numbers as European, and its
+heuristic took "Amount **Due**" for the due date. The fix was mostly not prompt wording but **deterministic
+checks on the model's answer** (above), plus a v2 prompt. The name check became case-sensitive: `maría lópez`
+now fails loudly instead of silently becoming `López`. Full reports:
+[v1](evals/results/2026-11-20-qwen2.5-3b-mapping_v1.md) · [v2](evals/results/2026-11-20-qwen2.5-3b-mapping_v2.md).
+
+**Live run** (300 fake rows): 33 distinct names → 3 model calls (5 already cached by the preview);
+299 rows exported, 1 skipped with its reason (invalid email).
 
 ## Run it
 
+Requirements: macOS or Linux, [uv](https://docs.astral.sh/uv/), Node ≥ 22 with npm ≥ 11, Ollama.
+
 ```bash
-make ollama-setup          # once: start Ollama and pull qwen2.5:3b
-make install               # backend (uv) and frontend (npm 11) dependencies
-make dev                   # UI on http://localhost:5173, API on http://localhost:8000/docs
+make ollama-setup          # once: start Ollama and pull qwen2.5:3b (~2 GB)
+make install               # backend (uv) and frontend (npm) dependencies
+make dev                   # UI on http://localhost:5173 · API docs on http://localhost:8000/docs
 ```
 
-Upload `examples/clientes_demo.csv`, review the proposed mapping (yellow rows need a look), preview the
-first 20 rows with per-cell errors, then export. Invalid rows are explained, and you can export without them.
+Upload [`examples/clientes_demo.csv`](examples/clientes_demo.csv), review, preview, export.
 
-### Or drive the API with curl
+<details>
+<summary>Or drive the API with curl</summary>
 
 ```bash
 FID=$(curl -s -F file=@examples/clientes_demo.csv localhost:8000/files | jq -r .file_id)
@@ -32,62 +95,98 @@ jq '{fields, skip_invalid: true}' proposal.json | curl -s -X POST -H 'content-ty
   -d @- localhost:8000/files/$FID/export -o clean.csv                   # full file
 curl -s localhost:8000/audit                                            # who exported what
 ```
+</details>
 
-Live run on an M2 with 8 GB (`examples/clientes_demo.csv`, 300 rows, fake data): proposal in 13 s with the
-full-name column mapped to `split_name_first` / `split_name_last`; export in 32 s with **33 distinct names →
-3 model calls** (5 already cached by the preview); 299 rows exported, 1 skipped (invalid email on row 150).
-The model proposed `lowercase_trim` for the id column, which a person fixes in review: that is the point.
+Other commands: `make test` (both suites), `make eval` (evals against the local model), `make help`.
 
-## Evals
+## Stack and layout
 
-`make eval` runs 15 hand-labelled CSVs (Spanish, English, UK, German, Portuguese and French headers,
-abbreviations, distractor columns, `Surname, First`, currency symbols…) and 60 hard names against the
-local model, writes a report to `evals/results/` and fails below 90 %. CI runs it on Ollama (CPU) when a
-prompt, a transform or the eval set changes.
+| | |
+|---|---|
+| Backend | Python 3.12, FastAPI, Pydantic v2, httpx, SQLite (audit), Redis (optional cache) |
+| Frontend | React 19, TypeScript, Vite, TanStack Query, Zod |
+| Model | Ollama `qwen2.5:3b` behind an `LLMProvider` interface |
+| Quality | pytest, Vitest + Testing Library + MSW, ruff, mypy `--strict`, ESLint, Prettier, gitleaks |
 
-| qwen2.5:3b, same model | prompt v1 | prompt v2 + checks |
-|---|---|---|
-| Mapping: column **and** transform right | 64.8 % | **97.1 %** |
-| Mapping: column right | 94.3 % | 97.1 % |
-| Name split, exact | 93.3 % | **96.7 %** |
-| Time per proposal (M2, 8 GB) | 13.3 s | 22.6 s |
+```
+backend/src/smart_csv_mapper/
+  ingest/          parse uploads, column profiles, in-memory store
+  transforms/      closed catalog of pure transforms (Ok / Err)
+  mapping/         prompt, answer checks, heuristics, suggestion
+  ai_transforms/   name splitting: distinct values, cache, batches, verification
+  llm/             LLMProvider: Ollama, fake
+  pipeline.py      apply a reviewed mapping: transform, validate, duplicates
+  export.py        CSV with formula-injection protection
+  audit.py         append-only audit log
+  evaluation.py    eval scoring and report
+frontend/src/      upload, review table, preview, export, history
+evals/             datasets, names, runner, reports
+docs/              design decisions (ADRs) and delivery plan
+```
 
-What v1 got wrong, and what fixed it: `lowercase_trim` on ids (13/15 files), `split_name` on columns that
-were already split, US numbers read as European, and a heuristic that took "Amount **Due**" as the due
-date. v2 adds deterministic checks on the model's answer (transforms allowed per field type; a dry run of
-the transform on the column's samples; `split_name` only on columns that hold full names; one column per
-field) and sends violations back for one retry. The name check became case-sensitive: `maría lópez` now
-fails loudly instead of silently becoming `López`. Reports: [v1](evals/results/2026-11-20-qwen2.5-3b-mapping_v1.md), [v2](evals/results/2026-11-20-qwen2.5-3b-mapping_v2.md).
+## Quality
+
+- **100 % branch coverage** enforced on both sides (250 backend tests, 56 frontend tests).
+- **Tests never call a model or the network**: a scripted `FakeProvider`, `httpx.MockTransport` and MSW at the
+  boundary. Only the evals use a real model.
+- **Mutation spot-checks on every PR**: conditions that matter are deliberately broken to prove a test fails;
+  surviving mutations led to new tests.
+- **CI on every PR**: lint, types, a no-ternary rule, tests, build, generated API types in sync with the backend,
+  secret scanning, and the evals job.
 
 ## Design decisions
 
-- **App factory + settings from the environment** (`create_app`, pydantic-settings): each test builds its own app; no global state.
-- **JSON logs with a request id** (`X-Request-ID`), kept in a `ContextVar` and reset after each request so it can't leak.
-- **Everything is read as text; no pandas.** Types are decided later by explicit transforms, never guessed silently.
-- **Encoding and delimiter detection:** UTF-8 (with BOM) first, then charset-normalizer; `csv.Sniffer` with a counting fallback.
-- **Stable error codes** (`duplicate_header`, `too_many_rows`, `malformed_csv`…) returned as 422, so the UI can explain each problem.
-- **Only a profile leaves the parser:** 5 distinct samples, distinct count and empty ratio per column. The LLM never sees the whole file.
-- **A closed catalog of named, pure transforms** (`trim`, `parse_eu_number`, `normalize_phone`, `map_values`…). Each returns `Ok(value)` or `Err(reason)` and never raises; the LLM may only pick from this list.
-- **Transforms and validation are separate steps:** a transform reshapes the text, then the target schema validates it (required, E.164, ≥ 0, ISO date). Empty stays empty until the schema decides.
-- **One `LLMProvider` interface** (`complete_json(prompt, schema)`, `is_ready()`), with Ollama by default and a scripted `FakeProvider` for tests. Ollama gets the JSON Schema as `format` (structured outputs) and `temperature: 0`.
-- **Retries only where they help:** network errors, timeouts and 5xx are retried with exponential backoff; 4xx (e.g. model not pulled) fails fast.
-- **`/readyz` checks the model, `/healthz` never does:** a stopped model should take the API out of rotation, not restart it.
-- **Mapping = model proposal, checked against reality.** The prompt (versioned, `mapping_v1`) lists the schema, the allowed transforms and the column profiles; samples are marked as data, not instructions. The answer schema uses enums for targets and transforms.
-- **Semantic validation + one retry:** unknown columns, disallowed transforms, missing params and duplicate targets are sent back to the model once; then the system falls back to header heuristics (synonyms in Spanish and English, whole-word and fuzzy matching, sample-based number and date format detection).
-- **Some transforms are for people only** (`constant`, `map_values`): in a live test the 3B model chose `constant` for the id column, which would have given every row the same id.
-- **Self-reported confidence isn't trusted:** the 3B model says 1.0 for everything, so a score above 0.6 is kept only when the header heuristic points to the same column.
-- **AI transforms run on the column, not on the cell** (`split_name_first` / `split_name_last`): distinct values only → cache lookup → misses in batches of 20 → results applied to every row. Live run: 1,000 rows, 10 distinct names → 1 model call (13 s); second run → 0 calls.
-- **The model may choose where to cut a name, never what it says:** an answer is accepted only if first + last rebuilds the input letter by letter (ignoring spaces, case and a "Surname, First" comma). Failed values are retried once, alone; then they become per-cell errors and are never cached.
-- **Cache key = transform + prompt version + model + value**, so changing the prompt or the model never serves stale results. In memory by default, Redis when `REDIS_URL` is set.
-- **Preview processes the first rows only** (20 by default), so it stays fast even with AI transforms; export processes the whole file and reuses whatever the preview cached.
-- **Export refuses invalid rows unless asked** (`skip_invalid`), and says which cell failed and why. Duplicate `external_id`s are errors.
-- **CSV injection protection:** cells starting with `=`, `@`, tab or CR get a leading `'`; `+`/`-` only when the cell is not a plain number or an E.164 phone, so `+34612345678` survives.
-- **Append-only audit log in SQLite** (triggers reject UPDATE and DELETE): user, file name and SHA-256 (never the content), mapping, model and AI stats.
-- **Frontend types come from the backend's OpenAPI** (`npm run gen:api`), and every response is also checked at runtime with Zod schemas that `satisfies` those types: if the contract drifts, `tsc` fails; if a response is wrong anyway, the UI says so instead of crashing. CI regenerates the types and fails if they changed.
-- **The UI never trusts the proposal silently:** low-confidence rows are yellow, every edit is marked "set by you" (and sent as `origin: user`), changing a transform clears its old params, and AI transforms are labelled.
-- **Server state with TanStack Query**, no global store; tests mock only the network, with MSW.
-- **The model's answer is type-checked against the data:** each target field lists the transforms that fit it, and the chosen transform is dry-run on the column's samples; failing half or more of them sends the answer back with the reason.
-- **Uploads live in memory with a 1 h TTL** (10 MB / 50k rows limits); persistence is out of scope.
+The full reasoning is in [docs/PLAN.md](docs/PLAN.md) (one ADR per decision). The short version:
+
+**Data in**
+- Everything is read as **text, no pandas**: nothing is guessed silently; types come from explicit transforms.
+- UTF-8 (with BOM) first, then charset-normalizer; `csv.Sniffer` with a counting fallback.
+- **Stable error codes** (`duplicate_header`, `too_many_rows`, `malformed_csv`…) so the UI can explain each problem.
+
+**The model**
+- One `LLMProvider` interface; Ollama by default (free, local), a fake for tests.
+- Retries only where they help: network errors, timeouts and 5xx with exponential backoff; 4xx fails fast.
+- Versioned prompts (`mapping_v2`, `split_name_v2`); sample values are marked as data, not instructions.
+- `constant` and `map_values` are **for people only**: in a live run the model picked `constant` for the id
+  column, which would have given every row the same id.
+
+**AI where code can't**
+- Column-level, not cell-level: distinct values → cache → batches of 20 → verify → apply to every row.
+- Cache key = transform + prompt version + model + value: changing any of them never serves stale results.
+
+**Output**
+- Preview processes the first 20 rows (fast, even with AI); export processes everything and reuses the cache.
+- Export refuses invalid rows unless asked, and says which cell failed and why; duplicate ids are errors.
+- **CSV injection protection**: `=`, `@`, tab and CR always neutralised; `+`/`-` only when the cell is not a
+  plain number or an E.164 phone, so `+34612345678` survives.
+- **Append-only audit log** (SQLite triggers reject UPDATE and DELETE): file SHA-256, never its content.
+
+**Frontend**
+- API types generated from the backend's OpenAPI, and every response validated at runtime with Zod schemas
+  that `satisfies` those types; CI fails if the generated types drift.
+- The UI never applies a proposal silently: yellow rows below 0.7, edits marked "set by you", AI transforms labelled.
+
+**Operations**
+- `/readyz` checks the model; `/healthz` never does (a stopped model should take the API out of rotation, not restart it).
+- JSON logs with a request id; every model call logs model, latency and tokens.
+
+## What I'd change for production
+
+- **Identity and access**: corporate SSO (OIDC) instead of the demo user, roles per data domain, and the audit
+  log in a store the app can only append to (e.g. a database role with INSERT only, or WORM storage).
+- **Storage and scale**: PostgreSQL instead of in-memory uploads and SQLite; large files processed as
+  background jobs from a queue (or Kafka), with **idempotent** imports so a re-run never duplicates rows.
+- **The model**: hosted inside the company's cloud account (for example Bedrock), personal data masked before
+  it reaches the model, per-team quotas and cost tracking, and a fallback model.
+- **Cache**: Redis shared across instances; if it is down, treat it as a cache miss instead of failing.
+- **Evals**: a larger, real-world-shaped eval set; online feedback from corrections in the review table
+  (each "set by you" is a labelled example); evals gating every prompt or model change.
+- **Observability**: OpenTelemetry traces across API, pipeline and model calls; SLOs on proposal latency and
+  export success; alerts on fallback rate.
+- **Deployment**: non-root container images, Helm chart and GitOps (Argo CD) on Kubernetes or OpenShift,
+  infrastructure as code with Terraform.
+- **Transforms**: an expression language such as JSONata for client-specific rules, still validated by dry runs.
+- **Testing**: browser end-to-end tests (Playwright) for the main flow.
 
 ## License
 

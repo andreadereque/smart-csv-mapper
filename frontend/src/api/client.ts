@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { rows } from "./plural";
 import {
   apiErrorSchema,
   auditEntrySchema,
@@ -59,7 +60,11 @@ function fromDetail(status: number, detail: unknown, code: string | undefined): 
     message = data.problems.join("; ");
   }
   if (data.invalid_row_count !== undefined) {
-    message = `${data.invalid_row_count} rows have errors.`;
+    let verb = "have";
+    if (data.invalid_row_count === 1) {
+      verb = "has";
+    }
+    message = `${rows(data.invalid_row_count)} ${verb} errors.`;
   }
   return new ApiError(status, message, data.code, {
     cellErrors: data.errors,

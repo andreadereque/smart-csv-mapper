@@ -66,13 +66,13 @@ describe("ExportPanel", () => {
     renderWithQuery(<ExportPanel fileId="f1" fields={proposal.fields} />);
     await userEvent.click(screen.getByRole("button", { name: "Export clean CSV" }));
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("1 rows have errors.");
+    expect(alert).toHaveTextContent("1 row has errors.");
     expect(alert).toHaveTextContent("Row 2, email: invalid email");
     await userEvent.click(
-      screen.getByRole("button", { name: "Export without the 1 invalid rows" }),
+      screen.getByRole("button", { name: "Skip 1 row with errors and export" }),
     );
     expect(
-      await screen.findByText("1 rows exported to clientes_clean.csv, 1 skipped."),
+      await screen.findByText("1 row exported to clientes_clean.csv, 1 skipped."),
     ).toBeInTheDocument();
     expect(skipFlags).toEqual([false, true]);
     expect(clicks).toEqual(["clientes_clean.csv"]);
@@ -89,7 +89,9 @@ describe("ExportPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Export clean CSV" }));
     expect(screen.getByRole("status")).toHaveTextContent("Transforming the whole file…");
     expect(await screen.findByRole("alert")).toHaveTextContent("File not found or expired.");
-    expect(screen.queryByRole("button", { name: /invalid rows/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /with errors and export/ }),
+    ).not.toBeInTheDocument();
   });
 });
 

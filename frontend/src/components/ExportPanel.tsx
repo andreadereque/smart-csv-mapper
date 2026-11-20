@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError, exportCsv, type ExportResult } from "../api/client";
+import { rows } from "../api/plural";
 import type { FieldMapping } from "../api/schemas";
 
 type Props = { fileId: string; fields: FieldMapping[] };
@@ -25,7 +26,7 @@ function InvalidRows({ error, onSkip }: { error: ApiError; onSkip: () => void })
         ))}
       </ul>
       <button type="button" className="secondary" onClick={onSkip}>
-        Export without the {error.invalidRowCount} invalid rows
+        Skip {rows(error.invalidRowCount)} with errors and export
       </button>
     </div>
   );
@@ -60,7 +61,7 @@ export function ExportPanel({ fileId, fields }: Props) {
       )}
       {exporter.data && (
         <p className="ok-text" role="status">
-          {exporter.data.exported} rows exported to {exporter.data.filename},{" "}
+          {rows(exporter.data.exported)} exported to {exporter.data.filename},{" "}
           {exporter.data.skipped} skipped.
         </p>
       )}
