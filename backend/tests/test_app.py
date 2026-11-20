@@ -6,7 +6,7 @@ import pytest
 from fastapi import Request, Response
 from fastapi.testclient import TestClient
 
-from smart_csv_mapper.config import Settings, get_settings
+from smart_csv_mapper.config import get_settings
 from smart_csv_mapper.logging import (
     REQUEST_ID_HEADER,
     JsonFormatter,
@@ -14,11 +14,6 @@ from smart_csv_mapper.logging import (
     request_id_var,
 )
 from smart_csv_mapper.main import create_app
-
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(create_app(Settings(log_level="DEBUG")))
 
 
 def test_healthz_reports_ok(client: TestClient) -> None:
